@@ -1,0 +1,122 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+  font-family: 'DanaFaNum';
+  src: url('/fonts/DanaFaNum-DemiBold.ttf') format('truetype');
+  font-weight: 600;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'DanaFaNum';
+  src: url('/fonts/DanaFaNum-Black.ttf') format('truetype');
+  font-weight: 900;
+  font-display: swap;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: 'DanaFaNum', sans-serif;
+  background-color: #05080F;
+  color: #E8EDF5;
+  direction: rtl;
+  overflow-x: hidden;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #05080F;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 212, 255, 0.3);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 212, 255, 0.6);
+}
+
+/* Selection */
+::selection {
+  background: rgba(0, 212, 255, 0.3);
+  color: #E8EDF5;
+}
+
+/* Number font fix for Persian */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ── Persian date picker (react-multi-date-picker) — dark neon theme ── */
+.rmdp-rasad,
+.rmdp-rasad .rmdp-wrapper {
+  background-color: #0A111F !important;
+  border: 1px solid rgba(0, 212, 255, 0.2) !important;
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5), 0 0 20px rgba(0, 212, 255, 0.08) !important;
+  font-family: 'DanaFaNum', sans-serif;
+}
+.rmdp-rasad .rmdp-header-values,
+.rmdp-rasad .rmdp-week-day,
+.rmdp-rasad .rmdp-day span,
+.rmdp-rasad .rmdp-month-name span {
+  color: #E8EDF5;
+}
+.rmdp-rasad .rmdp-week-day {
+  color: #8A94A6;
+}
+.rmdp-rasad .rmdp-arrow {
+  border-color: #00D4FF;
+}
+.rmdp-rasad .rmdp-arrow-container:hover {
+  background-color: rgba(0, 212, 255, 0.15);
+  box-shadow: none;
+}
+.rmdp-rasad .rmdp-arrow-container:hover .rmdp-arrow {
+  border-color: #00D4FF;
+}
+.rmdp-rasad .rmdp-day:not(.rmdp-disabled):not(.rmdp-day-hidden) span:hover {
+  background-color: rgba(0, 212, 255, 0.2) !important;
+  color: #fff;
+}
+.rmdp-rasad .rmdp-day.rmdp-today span {
+  background-color: rgba(124, 58, 237, 0.4);
+  color: #fff;
+}
+.rmdp-rasad .rmdp-day.rmdp-selected span:not(.highlight) {
+  background-color: #00D4FF !important;
+  color: #05080F !important;
+  box-shadow: 0 0 12px rgba(0, 212, 255, 0.5);
+}
+.rmdp-rasad .rmdp-day.rmdp-disabled span {
+  color: #455063;
+}
+.rmdp-rasad .rmdp-day.rmdp-deactive span {
+  color: #455063;
+}
+.rmdp-rasad .rmdp-month-picker,
+.rmdp-rasad .rmdp-year-picker {
+  background-color: #0A111F;
+}
+.rmdp-rasad .rmdp-ym .rmdp-day span {
+  border-radius: 8px;
+}
