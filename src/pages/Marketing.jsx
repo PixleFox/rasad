@@ -3,7 +3,7 @@ import { motion } from 'framer-motion'
 import FundsPageLayout from '../components/FundsPageLayout'
 import FundsTable from '../components/FundsTable'
 import { useRangeFunds } from '../hooks/useRangeFunds'
-import { computeMarketing, MARKETING_LEVELS, faNum, fmtSize } from '../lib/fipiran'
+import { computeMarketing, computeSegmentation, MARKETING_LEVELS, faNum, fmtSize } from '../lib/fipiran'
 
 const TABS = [
   { id: 6,  label: 'سهامی' },
@@ -14,6 +14,199 @@ const TABS = [
   { id: 23, label: 'شاخصی' },
   { id: 21, label: 'بخشی' },
 ]
+
+const VIEW_TABS = [
+  { id: 'marketing',     label: 'مارکتینگ' },
+  { id: 'segmentation',  label: 'بخشبندی صندوق‌ها' },
+]
+
+const fmtHamta = (bt) => {
+  const h = bt / 1000
+  if (h >= 1) return faNum(h.toFixed(1)) + ' همت'
+  return faNum(Math.round(bt)) + ' م.ت'
+}
+
+function SegmentCard({ seg }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, delay: seg.seg * 0.04 }}
+      className="rounded-xl border overflow-hidden"
+      style={{ borderColor: seg.color + '30', background: `${seg.color}08` }}
+    >
+      {/* Header row */}
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center gap-3 px-4 py-3 text-right cursor-pointer hover:bg-white/5 transition-colors"
+      >
+        {/* Segment badge */}
+        <span
+          className="shrink-0 px-2.5 py-1 rounded-lg text-xs font-dana tabular-nums"
+          style={{
+            fontWeight: 800,
+            color: seg.color,
+            background: seg.color + '18',
+            border: `1px solid ${seg.color}40`,
+          }}
+        >
+          {seg.label}
+        </span>
+
+        {/* AUM range */}
+        <span className="flex-1 text-xs font-dana text-text-muted text-right" style={{ fontWeight: 600 }}>
+          {fmtHamta(seg.minBT)} — {fmtHamta(seg.maxBT)}
+        </span>
+
+        {/* Stats */}
+        <div className="flex items-center gap-4 shrink-0">
+          <div className="flex flex-col items-center">
+            <span className="text-[0.65rem] text-text-muted font-dana" style={{ fontWeight: 600 }}>تعداد</span>
+            <span className="text-sm font-dana tabular-nums" style={{ fontWeight: 800, color: seg.color }}>
+              {faNum(seg.count)}
+            </span>
+          </div>
+          <div className="flex flex-col items-center">
+            <span className="text-[0.65rem] text-text-muted font-dana" style={{ fontWeight: 600 }}>مجموع AUM</span>
+            <span className="text-sm font-dana tabular-nums" style={{ fontWeight: 800, color: seg.color }}>
+              {fmtHamta(seg.totalBT)}
+            </span>
+          </div>
+          <div className="flex flex-col items-center">
+            <span className="text-[0.65rem] text-text-muted font-dana" style={{ fontWeight: 600 }}>میانگین AUM</span>
+            <span className="text-sm font-dana tabular-nums" style={{ fontWeight: 800, color: seg.color }}>
+              {fmtHamta(seg.meanBT)}
+            </span>
+          </div>
+          <span className="text-text-muted/40 text-xs ml-1">{open ? '▲' : '▼'}</span>
+        </div>
+      </button>
+
+      {/* Collapsible fund list */}
+      {open && (
+        <div className="border-t border-white/5 px-4 py-2 flex flex-col gap-1">
+          {seg.funds.map((f) => (
+            <div key={f.regNo} className="flex items-center gap-3 py-1.5 border-b border-white/4 last:border-0">
+              <span className="flex-1 text-sm font-dana text-text-primary truncate" style={{ fontWeight: 700 }}>
+                {f.name}
+              </span>
+              {f.symbol && (
+                <span
+                  className="text-xs font-dana text-neon-cyan px-1.5 py-0.5 rounded shrink-0"
+                  style={{ fontWeight: 600, background: 'rgba(0,212,255,0.1)', border: '1px solid rgba(0,212,255,0.2)' }}
+                >
+                  {f.symbol}
+                </span>
+              )}
+              <span className="text-xs font-dana text-text-muted shrink-0" style={{ fontWeight: 600 }}>
+                {f.manager}
+              </span>
+              <span className="text-sm font-dana tabular-nums shrink-0" style={{ fontWeight: 700, color: seg.color }}>
+                {fmtHamta(f.sizeRial / 1e10)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </motion.div>
+  )
+}
+
+function SegmentationView({ funds, tabId, setTabId, loading }) {
+  const segments = useMemo(() => computeSegmentation(funds, tabId), [funds, tabId])
+
+  const totalBT = useMemo(() => segments.reduce((s, g) => s + g.totalBT, 0), [segments])
+
+  return (
+    <div>
+      {/* Type tabs */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35 }}
+        className="flex flex-wrap gap-2 mb-5"
+      >
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setTabId(t.id)}
+            className={`px-4 py-2 rounded-lg text-sm font-dana cursor-pointer transition-all duration-200 ${
+              tabId === t.id
+                ? 'bg-neon-violet/15 text-neon-violet border border-neon-violet/40'
+                : 'bg-surface/60 text-text-muted border border-neon-cyan/10 hover:border-neon-cyan/30 hover:text-text-primary'
+            }`}
+            style={{ fontWeight: 600 }}
+          >
+            {t.label}
+          </button>
+        ))}
+      </motion.div>
+
+      {/* Summary bar */}
+      {!loading && segments.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="flex flex-wrap gap-3 mb-5"
+        >
+          {[
+            { label: 'تعداد صندوق', value: faNum(segments.reduce((s, g) => s + g.count, 0)), color: '#8A94A6' },
+            { label: 'مجموع AUM دسته', value: fmtHamta(totalBT), color: '#A78BFA' },
+            { label: 'تعداد سگمنت', value: faNum(segments.length), color: '#00D4FF' },
+          ].map((s) => (
+            <div
+              key={s.label}
+              className="px-4 py-2.5 rounded-xl border border-white/5 bg-surface/40 flex flex-col gap-0.5"
+            >
+              <span className="text-text-muted text-xs font-dana" style={{ fontWeight: 600 }}>{s.label}</span>
+              <span className="text-base font-dana tabular-nums" style={{ fontWeight: 900, color: s.color }}>{s.value}</span>
+            </div>
+          ))}
+        </motion.div>
+      )}
+
+      {/* AUM distribution bar */}
+      {!loading && segments.length > 0 && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mb-5">
+          <div className="flex h-3 rounded-full overflow-hidden w-full">
+            {segments.map((seg) => (
+              <div
+                key={seg.label}
+                style={{
+                  width: `${(seg.totalBT / totalBT) * 100}%`,
+                  background: seg.color,
+                  opacity: 0.85,
+                }}
+                title={`${seg.label}: ${fmtHamta(seg.totalBT)}`}
+              />
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-3 mt-2">
+            {segments.map((seg) => (
+              <span key={seg.label} className="flex items-center gap-1 text-[0.65rem] font-dana" style={{ color: seg.color, fontWeight: 600 }}>
+                <span className="w-2 h-2 rounded-full inline-block" style={{ background: seg.color }} />
+                {seg.label}
+              </span>
+            ))}
+          </div>
+        </motion.div>
+      )}
+
+      {/* Segment cards */}
+      <div className="flex flex-col gap-3">
+        {segments.map((seg) => (
+          <SegmentCard key={seg.label} seg={seg} />
+        ))}
+        {!loading && segments.length === 0 && (
+          <p className="text-center text-text-muted text-sm font-dana py-10" style={{ fontWeight: 600 }}>
+            داده‌ای برای این دسته یافت نشد.
+          </p>
+        )}
+      </div>
+    </div>
+  )
+}
 
 function MarketingBadge({ level }) {
   if (!level) return <span className="text-text-muted/40 text-xs">—</span>
@@ -150,6 +343,7 @@ const GOOD_SORT_KEYS = ['delta', 'flow', 'size', 'score', 'marketShare']
 export default function Marketing() {
   const { funds, startDate, endDate, loading, error, startISO, endISO, setStartISO, setEndISO } =
     useRangeFunds()
+  const [view, setView] = useState('marketing')
   const [tabId, setTabId] = useState(6)
 
   const rows = useMemo(() => computeMarketing(funds, tabId), [funds, tabId])
@@ -179,6 +373,35 @@ export default function Marketing() {
       setEndISO={setEndISO}
       floatAsset="/assets/Astronut.png"
     >
+      {/* View switcher */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+        className="flex gap-2 mb-6"
+      >
+        {VIEW_TABS.map((vt) => (
+          <button
+            key={vt.id}
+            onClick={() => setView(vt.id)}
+            className={`px-5 py-2 rounded-xl text-sm font-dana cursor-pointer transition-all duration-200 ${
+              view === vt.id
+                ? 'bg-neon-violet/20 text-neon-violet border border-neon-violet/50'
+                : 'bg-surface/50 text-text-muted border border-white/8 hover:border-neon-violet/25 hover:text-text-primary'
+            }`}
+            style={{ fontWeight: 700 }}
+          >
+            {vt.label}
+          </button>
+        ))}
+      </motion.div>
+
+      {view === 'segmentation' && (
+        <SegmentationView funds={funds} tabId={tabId} setTabId={setTabId} loading={loading} />
+      )}
+
+      {view === 'marketing' && (<>
+
       {/* Legend — gradient spectrum (RTL: بیگ‌بنگ on right = green, ناموفق on left = red) */}
       <motion.div
         initial={{ opacity: 0, y: 12 }}
@@ -281,6 +504,8 @@ export default function Marketing() {
       <p className="text-center text-text-muted text-xs font-dana mt-5 leading-relaxed" style={{ fontWeight: 600 }}>
         منبع: فیپیران · تفاوت = جریان واقعی − جریان مورد انتظار بر اساس سهم بازار ابتدای بازه · م.ت = میلیارد تومان
       </p>
+
+      </>)}
     </FundsPageLayout>
   )
 }

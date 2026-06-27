@@ -182,26 +182,34 @@ export async function fetchRangeReturns(startISO, endISO) {
     fetchFundCompare(startISO),
   ])
 
-  // Fetch previous trading day in parallel to fill snapshot gaps
-  const prevDayISO = shiftISO(endSnap.date, -1)
-  let prevSnap = null
-  try {
-    prevSnap = await fetchFundCompare(prevDayISO)
-  } catch { /* not critical */ }
-
   const startById = new Map(startSnap.funds.map((f) => [f.regNo, f]))
   const endById   = new Map(endSnap.funds.map((f) => [f.regNo, f]))
 
-  // Merge funds missing from endSnap using previous trading day
+  // Walk back up to 7 days to find funds missing from endSnap.
+  // Each missing fund keeps the most recent date it was seen, marked stale.
   const mergedEnd = [...endSnap.funds]
   let staleFundsCount = 0
   let staleDate = null
-  if (prevSnap && prevSnap.date !== endSnap.date) {
-    for (const pf of prevSnap.funds) {
-      if (!endById.has(pf.regNo)) {
-        mergedEnd.push({ ...pf, stale: true })
+  const foundSoFar = new Set(endSnap.funds.map((f) => f.regNo))
+
+  for (let daysBack = 1; daysBack <= 7; daysBack++) {
+    // Stop early if we have nothing left to search for
+    const missingInStart = [...startById.keys()].filter((id) => !foundSoFar.has(id))
+    if (missingInStart.length === 0) break
+
+    const lookISO = shiftISO(endSnap.date, -daysBack)
+    if (lookISO <= startSnap.date) break // don't cross into the start snapshot
+
+    let snap = null
+    try { snap = await fetchFundCompare(lookISO) } catch { continue }
+    if (!snap || snap.date === endSnap.date) continue
+
+    for (const pf of snap.funds) {
+      if (!foundSoFar.has(pf.regNo)) {
+        mergedEnd.push({ ...pf, stale: true, staleDate: snap.date })
+        foundSoFar.add(pf.regNo)
         staleFundsCount++
-        staleDate = prevSnap.date
+        staleDate = snap.date
       }
     }
   }
@@ -308,44 +316,139 @@ export const riskLevel = (f) => {
   return Math.max(0, Math.min(100, Math.round(r)))
 }
 
-// Rasad score 10..100 — composite of range return, size (liquidity proxy),
-// history, and valuation (low bubble), normalized within the given group.
+// ── Rasad Score v2 — type-aware scoring ─────────────────────────────────────
+// Weights per fund type. Keys: ret=return, size, hist=history, bubble, reserve, riskFit, flow
+const TYPE_WEIGHTS = {
+  4:  { ret: 0.25, size: 0.20, hist: 0.10, bubble: 0.05, reserve: 0.25, riskFit: 0.10, flow: 0.05 }, // درآمد ثابت
+  6:  { ret: 0.45, size: 0.18, hist: 0.12, bubble: 0.10, reserve: 0.00, riskFit: 0.05, flow: 0.10 }, // سهامی
+  7:  { ret: 0.40, size: 0.20, hist: 0.12, bubble: 0.05, reserve: 0.08, riskFit: 0.05, flow: 0.10 }, // مختلط
+  21: { ret: 0.45, size: 0.18, hist: 0.12, bubble: 0.10, reserve: 0.00, riskFit: 0.05, flow: 0.10 }, // بخشی
+  22: { ret: 0.35, size: 0.15, hist: 0.10, bubble: 0.30, reserve: 0.00, riskFit: 0.00, flow: 0.10 }, // اهرمی
+  5:  { ret: 0.30, size: 0.20, hist: 0.12, bubble: 0.28, reserve: 0.00, riskFit: 0.00, flow: 0.10 }, // کالایی
+  23: { ret: 0.30, size: 0.25, hist: 0.15, bubble: 0.20, reserve: 0.00, riskFit: 0.00, flow: 0.10 }, // شاخصی
+  24: { ret: 0.25, size: 0.25, hist: 0.15, bubble: 0.00, reserve: 0.30, riskFit: 0.05, flow: 0.00 }, // تضمین اصل
+}
+const DEFAULT_WEIGHTS = { ret: 0.40, size: 0.25, hist: 0.20, bubble: 0.00, reserve: 0.00, riskFit: 0.00, flow: 0.15 }
+
+// Normalize array of values to 0..1 range (returns Map: index→normVal)
+function normMap(arr) {
+  const finite = arr.filter(Number.isFinite)
+  if (finite.length < 2) return arr.map(() => 0.5)
+  const mn = Math.min(...finite)
+  const mx = Math.max(...finite)
+  return arr.map((v) => (Number.isFinite(v) ? (mx > mn ? (v - mn) / (mx - mn) : 0.5) : null))
+}
+
 export function enrichFunds(funds, endISO) {
-  const rets = funds.map((f) => f.rangeReturn).filter(Number.isFinite)
-  const sizes = funds.filter((f) => f.sizeRial > 0).map((f) => Math.log10(f.sizeRial))
-  const minR = Math.min(...rets, 0)
-  const maxR = Math.max(...rets, 1)
-  const minS = Math.min(...sizes, 0)
-  const maxS = Math.max(...sizes, 1)
-  const norm = (v, mn, mx) => (mx > mn ? (v - mn) / (mx - mn) : 0.5)
-
-  return funds.map((f) => {
-    const years = yearsSince(f.initiationDate, endISO)
-    const reserve = reserveBillionToman(f)
-    const bubble = bubblePercent(f)
-    const risk = riskLevel(f)
-
-    const rN = Number.isFinite(f.rangeReturn) ? norm(f.rangeReturn, minR, maxR) : 0.5
-    const sN = f.sizeRial > 0 ? norm(Math.log10(f.sizeRial), minS, maxS) : 0.5
-    const hN = years != null ? Math.min(years / 5, 1) : 0.3
-    // vN: 0% bubble → 1.0, ±15% bubble → 0.0. Default 0.5 for non-ETFs (no bubble data).
-    const vN = bubble != null ? Math.max(0, 1 - Math.abs(bubble) / 15) : 0.5
-    const rawScore01 = rN * 0.4 + sN * 0.25 + hN * 0.2 + vN * 0.15
-
-    // Reserve penalty: negative reserve (ذخیره منفی) significantly lowers the score.
-    // Penalty scales with severity relative to fund AUM, capped at 0.40 (= 36 pts off).
-    let reservePenalty = 0
-    if (reserve != null && reserve < 0) {
-      const aumBT = Math.max((f.sizeRial || 0) / 1e10, 1)
-      const pctOfAUM = Math.abs(reserve) / aumBT
-      reservePenalty = Math.min(pctOfAUM * 3, 0.40)
-    }
-
-    const score01 = Math.max(0, rawScore01 - reservePenalty)
-    const rasadScore = Math.max(10, Math.min(100, Math.round(10 + score01 * 90)))
-
-    return { ...f, years, reserve, bubble, risk, rasadScore }
+  // Group funds by type for within-type normalization
+  const byType = new Map()
+  funds.forEach((f, i) => {
+    const t = f.type
+    if (!byType.has(t)) byType.set(t, [])
+    byType.get(t).push({ f, i })
   })
+
+  // Pre-compute per-fund metrics (type-independent)
+  const metrics = funds.map((f) => ({
+    years:   yearsSince(f.initiationDate, endISO),
+    reserve: reserveBillionToman(f),
+    bubble:  bubblePercent(f),
+    risk:    riskLevel(f),
+  }))
+
+  // Build score array
+  const scores = new Array(funds.length).fill(null)
+
+  for (const [type, group] of byType) {
+    const w = TYPE_WEIGHTS[type] ?? DEFAULT_WEIGHTS
+
+    // Build raw vectors within the group
+    const rets    = group.map(({ f }) => Number.isFinite(f.rangeReturn) && Math.abs(f.rangeReturn) < 10000 ? f.rangeReturn : null)
+    const logSizes = group.map(({ f }) => f.sizeRial > 0 ? Math.log10(f.sizeRial) : null)
+    const hists   = group.map(({ i }) => metrics[i].years)
+    const bubbles = group.map(({ f, i }) => {
+      // For non-ETF funds in types where bubble matters, treat as neutral
+      if (!f.isETF && [4, 6, 7, 21, 24].includes(type)) return null
+      return metrics[i].bubble
+    })
+    const reserves = group.map(({ i }) => metrics[i].reserve)
+    // riskFit: درآمد ثابت باید سهام کم داشته باشه → score = 1 - stock%/100
+    const riskFits = group.map(({ f }) =>
+      type === 4 ? Math.max(0, 1 - (f.comp?.stock || 0) / 100) : null
+    )
+    // flow: positive = inflow (good sign), normalize within group
+    const flows = group.map(({ f }) =>
+      Number.isFinite(f.unitsStart) && f.navRet > 0
+        ? (f.units - f.unitsStart) * f.navRet
+        : null
+    )
+
+    // Normalize each dimension
+    const nRet     = normMap(rets)
+    const nSize    = normMap(logSizes)
+    const nHist    = normMap(hists)
+    // Bubble: lower abs bubble = better; threshold-aware
+    const nBubble  = bubbles.map((b) => {
+      if (b == null) return w.bubble > 0 ? 0.5 : null
+      if (Math.abs(b) < 2) return 1.0            // حباب زیر ۲٪ — عالی
+      if (Math.abs(b) > 10) return 0.0           // حباب بالای ۱۰٪ — بد
+      return 1 - (Math.abs(b) - 2) / 8
+    })
+    const nReserve = normMap(reserves)            // higher reserve = better
+    const nRiskFit = normMap(riskFits)
+    const nFlow    = normMap(flows)
+
+    group.forEach(({ f, i }, gi) => {
+      const get = (arr, fallback = 0.5) => arr[gi] ?? fallback
+
+      // Redistribute bubble weight to return when bubble not applicable
+      let wBubble = w.bubble
+      let wRet    = w.ret
+      if (nBubble[gi] === 0.5 && !f.isETF) { wRet += wBubble; wBubble = 0 }
+
+      const raw =
+        get(nRet)     * wRet     +
+        get(nSize)    * w.size   +
+        get(nHist)    * w.hist   +
+        get(nBubble)  * wBubble  +
+        get(nReserve) * w.reserve +
+        get(nRiskFit) * w.riskFit +
+        get(nFlow)    * w.flow
+
+      // ── جریمه‌ها ──
+      let penalty = 0
+
+      // ۱. ذخیره منفی
+      const res = metrics[i].reserve
+      if (res != null && res < 0) {
+        const aumBT = Math.max((f.sizeRial || 0) / 1e10, 1)
+        const severity = [4, 24].includes(type) ? 5 : 3  // درآمد ثابت/تضمین = سخت‌تر
+        penalty += Math.min(Math.abs(res) / aumBT * severity * 0.1, 0.45)
+      }
+
+      // ۲. حباب بالا در ETF (آستانه‌ای)
+      const bub = metrics[i].bubble
+      if (f.isETF && bub != null && Math.abs(bub) > 10)
+        penalty += Math.min((Math.abs(bub) - 10) / 20, 0.25)
+
+      // ۳. صندوق خیلی کوچک (زیر ۵۰۰ میلیارد تومان = ۵e12 ریال)
+      const tooSmall = f.sizeRial > 0 && f.sizeRial < 5e12
+      const score01 = Math.max(0, raw - penalty)
+      let rasadScore = Math.max(10, Math.min(100, Math.round(10 + score01 * 90)))
+      if (tooSmall) rasadScore = Math.min(rasadScore, 70)
+
+      scores[i] = rasadScore
+    })
+  }
+
+  return funds.map((f, i) => ({
+    ...f,
+    years:      metrics[i].years,
+    reserve:    metrics[i].reserve,
+    bubble:     metrics[i].bubble,
+    risk:       metrics[i].risk,
+    rasadScore: scores[i] ?? 10,
+  }))
 }
 
 // ── Manager aggregation (مدیران صندوق‌ها صفحه) ─────────────────────────────
@@ -540,6 +643,61 @@ export function splitFixedIncome(funds) {
     issuanceDividend:    fi.filter((f) => !f.isETF && f.dividendDays > 0),
     issuanceAccumulating:fi.filter((f) => !f.isETF && f.dividendDays <= 0),
   }
+}
+
+// ── AUM Segmentation (بخشبندی صندوق‌ها) ─────────────────────────────────────
+// Divides funds of a given type into 7 AUM-based segments (Seg1=smallest, Seg7=largest)
+// using heptile (7-quantile) breakpoints derived from the actual data distribution.
+
+const TYPE_ABBR = { 4: 'FI', 6: 'EQ', 7: 'MX', 22: 'LV', 5: 'CM', 23: 'IX', 21: 'SC' }
+
+// Segment colors from cool-blue (small) to warm-gold (large)
+const SEG_COLORS = [
+  '#60A5FA', // Seg1 – blue
+  '#34D399', // Seg2 – teal
+  '#A78BFA', // Seg3 – violet
+  '#00D4FF', // Seg4 – cyan
+  '#FBBF24', // Seg5 – amber
+  '#F97316', // Seg6 – orange
+  '#FF3B6B', // Seg7 – red/gold (mega)
+]
+
+export function computeSegmentation(funds, typeId) {
+  const abbr = TYPE_ABBR[typeId] ?? 'XX'
+  const typeFunds = funds
+    .filter((f) => f.type === typeId && !f.isCharity && f.sizeRial > 0)
+    .sort((a, b) => b.sizeRial - a.sizeRial)
+
+  if (typeFunds.length === 0) return []
+
+  const n = typeFunds.length
+  const segments = []
+
+  for (let seg = 1; seg <= 7; seg++) {
+    const startIdx = Math.floor(((seg - 1) * n) / 7)
+    const endIdx   = Math.floor((seg * n) / 7)
+    const segFunds = typeFunds.slice(startIdx, endIdx)
+    if (segFunds.length === 0) continue
+
+    const minBT   = segFunds[0].sizeRial / 1e10
+    const maxBT   = segFunds[segFunds.length - 1].sizeRial / 1e10
+    const totalBT = segFunds.reduce((s, f) => s + f.sizeRial / 1e10, 0)
+    const meanBT  = totalBT / segFunds.length
+
+    segments.push({
+      label:   `Seg${seg}-${abbr}`,
+      seg,
+      color:   SEG_COLORS[seg - 1],
+      funds:   segFunds,
+      count:   segFunds.length,
+      minBT,
+      maxBT,
+      totalBT,
+      meanBT,
+    })
+  }
+
+  return segments
 }
 
 // ── Rankings (رتبه‌بندی بازدهی و AUM) ────────────────────────────────────────
