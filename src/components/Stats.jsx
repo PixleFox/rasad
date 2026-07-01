@@ -49,9 +49,9 @@ const stats = [
   )},
 ]
 
-function StatCard({ stat, inView, liveValue }) {
+function StatCard({ stat, inView, liveValue, loading }) {
   const effectiveValue = liveValue ?? stat.value
-  const count = useCounter(effectiveValue, 1800, inView)
+  const count = useCounter(effectiveValue, 1800, inView && !loading)
 
   return (
     <motion.div
@@ -61,14 +61,12 @@ function StatCard({ stat, inView, liveValue }) {
       transition={{ duration: 0.5 }}
       className="relative p-6 rounded-2xl border border-neon-cyan/10 bg-surface/50 backdrop-blur-sm overflow-hidden group hover:border-neon-cyan/25 transition-all duration-300"
     >
-      {/* Glow bg */}
       <div
         className="absolute inset-0 opacity-5 group-hover:opacity-10 transition-opacity duration-300 rounded-2xl"
         style={{ background: `radial-gradient(circle at center, ${stat.color}, transparent 70%)` }}
       />
 
       <div className="relative z-10 flex flex-col items-center text-center gap-3">
-        {/* Icon */}
         <div
           className="w-12 h-12 rounded-xl flex items-center justify-center"
           style={{ color: stat.color, background: `${stat.color}15`, boxShadow: `0 0 0 1px ${stat.color}30` }}
@@ -76,15 +74,16 @@ function StatCard({ stat, inView, liveValue }) {
           {stat.icon}
         </div>
 
-        {/* Number */}
         <div
           className="text-3xl sm:text-4xl font-dana tabular-nums"
           style={{ fontWeight: 900, color: stat.color, textShadow: `0 0 20px ${stat.color}60` }}
         >
-          {count.toLocaleString('fa-IR')}{stat.suffix}
+          {loading
+            ? <span className="text-lg opacity-50 animate-pulse">در حال لود...</span>
+            : <>{count.toLocaleString('fa-IR')}{stat.suffix}</>
+          }
         </div>
 
-        {/* Label */}
         <p className="text-text-muted text-sm font-dana" style={{ fontWeight: 600 }}>
           {stat.label}
         </p>
@@ -100,16 +99,37 @@ export default function Stats() {
   // Live fund count and total AUM from Fipiran
   const [liveCount, setLiveCount] = useState(null)
   const [liveAUM, setLiveAUM]     = useState(null)
+  const [liveLoading, setLiveLoading] = useState(true)
 
   useEffect(() => {
-    fetchFundCompare(todayISO())
-      .then(({ funds }) => {
-        setLiveCount(funds.length)
-        const totalRial = funds.reduce((s, f) => s + (f.navRet > 0 && f.units > 0 ? f.navRet * f.units : 0), 0)
-        // Convert to هزار میلیارد تومان (rial / 1e13)
-        setLiveAUM(Math.round(totalRial / 1e13))
-      })
-      .catch(() => {})
+    const isoDate = (daysBack) => {
+      const d = new Date()
+      d.setDate(d.getDate() - daysBack)
+      return d.toISOString().slice(0, 10)
+    }
+
+    const run = async () => {
+      // Fetch today + up to 7 previous days, merge by regNo (union)
+      const { funds: todayFunds } = await fetchFundCompare(isoDate(0))
+      const byRegNo = new Map(todayFunds.map((f) => [f.regNo, f]))
+
+      for (let i = 1; i <= 7; i++) {
+        if (byRegNo.size >= todayFunds.length + 50 && i > 2) break
+        try {
+          const { funds: prev } = await fetchFundCompare(isoDate(i))
+          for (const f of prev) {
+            if (!byRegNo.has(f.regNo)) byRegNo.set(f.regNo, f)
+          }
+        } catch (_) {}
+      }
+
+      const merged = [...byRegNo.values()]
+      setLiveCount(merged.length)
+      const totalRial = merged.reduce((s, f) => s + (f.navRet > 0 && f.units > 0 ? f.navRet * f.units : 0), 0)
+      setLiveAUM(Math.round(totalRial / 1e13))
+    }
+
+    run().catch(() => {}).finally(() => setLiveLoading(false))
   }, [])
 
   return (
@@ -158,7 +178,8 @@ export default function Stats() {
               stat.label === 'صندوق فعال' && liveCount != null ? liveCount
               : stat.label === 'کل دارایی تحت مدیریت' && liveAUM != null ? liveAUM
               : null
-            return <StatCard key={stat.label} stat={stat} inView={inView} liveValue={liveValue} />
+            const isLiveStat = stat.label === 'صندوق فعال' || stat.label === 'کل دارایی تحت مدیریت'
+            return <StatCard key={stat.label} stat={stat} inView={inView} liveValue={liveValue} loading={isLiveStat && liveLoading} />
           })}
         </div>
       </div>

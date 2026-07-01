@@ -4,7 +4,7 @@ import FundsPageLayout from './FundsPageLayout'
 import FundsTable from './FundsTable'
 import { otherFundsColumns } from './fundColumns'
 import { useRangeFunds } from '../hooks/useRangeFunds'
-import { enrichFunds, fmtSize } from '../lib/fipiran'
+import { enrichFunds } from '../lib/fipiran'
 
 export default function FundCategoryPage({
   typeId,

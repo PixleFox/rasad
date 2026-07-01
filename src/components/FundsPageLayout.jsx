@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion'
 import RangePicker from './RangePicker'
 import { toJalali } from '../lib/fipiran'
+import FipiranLoader from './FipiranLoader'
 
 // Shared chrome for the fund-info pages: background, header with title + badge +
 // Shamsi range pickers + resolved-date subtitle. Renders children below.
@@ -23,6 +24,7 @@ export default function FundsPageLayout({
 }) {
   return (
     <main className="relative min-h-screen overflow-hidden">
+      <FipiranLoader loading={loading} />
       {/* Background */}
       <div className="absolute inset-0 pointer-events-none">
         <div className="absolute top-0 left-1/3 w-[600px] h-[400px] bg-neon-violet/10 blur-[140px] rounded-full" />

@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion'
+import { useState } from 'react'
 
 const fade = (delay = 0) => ({
   initial: { opacity: 0, y: 24 },
@@ -46,6 +47,120 @@ const VALUES = [
     desc: 'شاخص رصد با وزن‌دهی علمی به بازدهی، اندازه، سابقه و ارزندگی محاسبه می‌شود.',
   },
 ]
+
+function ContactForm() {
+  const [status, setStatus] = useState('idle') // idle | sending | sent | error
+  const [form, setForm] = useState({ name: '', email: '', subject: '', message: '' })
+
+  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setStatus('sending')
+    try {
+      const res = await fetch('https://formsubmit.co/ajax/alirezaeslamibidgoli@gmail.com', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({
+          نام: form.name,
+          ایمیل: form.email,
+          موضوع: form.subject,
+          پیام: form.message,
+          _subject: `پیام جدید از رصد — ${form.subject}`,
+          _captcha: 'false',
+          _template: 'table',
+        }),
+      })
+      if (res.ok) {
+        setStatus('sent')
+        setForm({ name: '', email: '', subject: '', message: '' })
+      } else {
+        setStatus('error')
+      }
+    } catch {
+      setStatus('error')
+    }
+  }
+
+  if (status === 'sent') {
+    return (
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="rounded-2xl border border-neon-cyan/20 bg-surface/30 backdrop-blur-sm p-8 sm:p-10 flex flex-col items-center gap-4 text-center"
+      >
+        <div className="w-16 h-16 rounded-full flex items-center justify-center"
+          style={{ background: 'rgba(0,255,157,0.15)', border: '1px solid rgba(0,255,157,0.3)' }}>
+          <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="#00FF9D">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
+        </div>
+        <h3 className="text-white text-lg font-dana" style={{ fontWeight: 900 }}>پیام ارسال شد!</h3>
+        <p className="text-text-muted text-sm font-dana" style={{ fontWeight: 600 }}>
+          پیام شما با موفقیت دریافت شد. در اسرع وقت پاسخ خواهیم داد.
+        </p>
+        <button
+          onClick={() => setStatus('idle')}
+          className="text-neon-cyan text-sm font-dana cursor-pointer hover:text-white transition-colors"
+          style={{ fontWeight: 700 }}
+        >
+          ارسال پیام دیگر
+        </button>
+      </motion.div>
+    )
+  }
+
+  return (
+    <div className="rounded-2xl border border-neon-cyan/10 bg-surface/30 backdrop-blur-sm p-6 sm:p-8">
+      <h3 className="text-white text-base mb-6" style={{ fontWeight: 900 }}>ارسال پیام</h3>
+      <form className="space-y-4" onSubmit={handleSubmit}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-text-muted text-xs font-dana mb-1.5" style={{ fontWeight: 600 }}>نام و نام خانوادگی</label>
+            <input required type="text" value={form.name} onChange={set('name')}
+              placeholder="علیرضا اسلامی بیدگلی"
+              className="w-full px-3.5 py-2.5 rounded-lg border border-neon-cyan/15 bg-space/60 text-text-primary text-sm font-dana outline-none focus:border-neon-cyan/40 transition-colors"
+              style={{ fontWeight: 600 }} />
+          </div>
+          <div>
+            <label className="block text-text-muted text-xs font-dana mb-1.5" style={{ fontWeight: 600 }}>ایمیل</label>
+            <input required type="email" value={form.email} onChange={set('email')}
+              placeholder="email@example.com"
+              className="w-full px-3.5 py-2.5 rounded-lg border border-neon-cyan/15 bg-space/60 text-text-primary text-sm font-dana outline-none focus:border-neon-cyan/40 transition-colors"
+              style={{ fontWeight: 600 }} />
+          </div>
+        </div>
+        <div>
+          <label className="block text-text-muted text-xs font-dana mb-1.5" style={{ fontWeight: 600 }}>موضوع</label>
+          <input required type="text" value={form.subject} onChange={set('subject')}
+            placeholder="پیشنهاد / گزارش مشکل / همکاری"
+            className="w-full px-3.5 py-2.5 rounded-lg border border-neon-cyan/15 bg-space/60 text-text-primary text-sm font-dana outline-none focus:border-neon-cyan/40 transition-colors"
+            style={{ fontWeight: 600 }} />
+        </div>
+        <div>
+          <label className="block text-text-muted text-xs font-dana mb-1.5" style={{ fontWeight: 600 }}>پیام</label>
+          <textarea required rows={4} value={form.message} onChange={set('message')}
+            placeholder="پیام خود را بنویسید..."
+            className="w-full px-3.5 py-2.5 rounded-lg border border-neon-cyan/15 bg-space/60 text-text-primary text-sm font-dana outline-none focus:border-neon-cyan/40 transition-colors resize-none"
+            style={{ fontWeight: 600 }} />
+        </div>
+        {status === 'error' && (
+          <p className="text-xs font-dana" style={{ color: '#FF3B6B', fontWeight: 600 }}>
+            خطا در ارسال. لطفاً مستقیم به alirezaeslamibidgoli@gmail.com ایمیل بزنید.
+          </p>
+        )}
+        <button
+          type="submit"
+          disabled={status === 'sending'}
+          className="w-full py-3 rounded-xl text-sm font-dana text-space bg-neon-cyan hover:bg-white transition-all duration-200 cursor-pointer shadow-neon-cyan disabled:opacity-60"
+          style={{ fontWeight: 900 }}
+        >
+          {status === 'sending' ? 'در حال ارسال...' : 'ارسال پیام'}
+        </button>
+      </form>
+    </div>
+  )
+}
 
 export default function About() {
   return (
@@ -170,53 +285,7 @@ export default function About() {
             ))}
           </div>
 
-          {/* Contact form */}
-          <div className="rounded-2xl border border-neon-cyan/10 bg-surface/30 backdrop-blur-sm p-6 sm:p-8">
-            <h3 className="text-white text-base mb-6" style={{ fontWeight: 900 }}>ارسال پیام</h3>
-            <form className="space-y-4" onSubmit={e => e.preventDefault()}>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {[
-                  { label: 'نام و نام خانوادگی', placeholder: 'علیرضا اسلامی بیدگلی', type: 'text' },
-                  { label: 'ایمیل', placeholder: 'email@example.com', type: 'email' },
-                ].map((f) => (
-                  <div key={f.label}>
-                    <label className="block text-text-muted text-xs font-dana mb-1.5" style={{ fontWeight: 600 }}>{f.label}</label>
-                    <input
-                      type={f.type}
-                      placeholder={f.placeholder}
-                      className="w-full px-3.5 py-2.5 rounded-lg border border-neon-cyan/15 bg-space/60 text-text-primary text-sm font-dana outline-none focus:border-neon-cyan/40 transition-colors"
-                      style={{ fontWeight: 600 }}
-                    />
-                  </div>
-                ))}
-              </div>
-              <div>
-                <label className="block text-text-muted text-xs font-dana mb-1.5" style={{ fontWeight: 600 }}>موضوع</label>
-                <input
-                  type="text"
-                  placeholder="پیشنهاد / گزارش مشکل / همکاری"
-                  className="w-full px-3.5 py-2.5 rounded-lg border border-neon-cyan/15 bg-space/60 text-text-primary text-sm font-dana outline-none focus:border-neon-cyan/40 transition-colors"
-                  style={{ fontWeight: 600 }}
-                />
-              </div>
-              <div>
-                <label className="block text-text-muted text-xs font-dana mb-1.5" style={{ fontWeight: 600 }}>پیام</label>
-                <textarea
-                  rows={4}
-                  placeholder="پیام خود را بنویسید..."
-                  className="w-full px-3.5 py-2.5 rounded-lg border border-neon-cyan/15 bg-space/60 text-text-primary text-sm font-dana outline-none focus:border-neon-cyan/40 transition-colors resize-none"
-                  style={{ fontWeight: 600 }}
-                />
-              </div>
-              <button
-                type="submit"
-                className="w-full py-3 rounded-xl text-sm font-dana text-space bg-neon-cyan hover:bg-white transition-all duration-200 cursor-pointer shadow-neon-cyan"
-                style={{ fontWeight: 900 }}
-              >
-                ارسال پیام
-              </button>
-            </form>
-          </div>
+          <ContactForm />
         </motion.section>
 
       </div>

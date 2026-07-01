@@ -1,4 +1,4 @@
-import { faNum, fmtSize, fmtPercent } from '../lib/fipiran'
+import { faNum, fmtSize, fmtPercent, toJalali } from '../lib/fipiran'
 import { ScorePill, RiskMeter, SiteLink } from './FundsTable'
 
 const nameCell = (f) => (
@@ -9,6 +9,11 @@ const nameCell = (f) => (
     <span className="text-text-muted text-xs font-dana truncate" style={{ fontWeight: 600 }}>
       {f.manager}
     </span>
+    {f.stale && f.staleDate && (
+      <span className="text-xs font-dana" style={{ color: '#F59E0B' }}>
+        ⚠ داده {toJalali(f.staleDate)}
+      </span>
+    )}
   </div>
 )
 

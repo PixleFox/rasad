@@ -1,11 +1,12 @@
 import { useState, useMemo } from 'react'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import FundsPageLayout from '../components/FundsPageLayout'
 import FundsTable from '../components/FundsTable'
 import { useRankingData } from '../hooks/useRankingData'
 import { computeRankings, faNum, fmtSize, fmtPercent } from '../lib/fipiran'
 
 const TABS = [
+  { id: 0,  label: 'همه صندوق‌ها' },
   { id: 6,  label: 'سهامی' },
   { id: 4,  label: 'درآمد ثابت' },
   { id: 7,  label: 'مختلط' },
@@ -227,7 +228,7 @@ export default function Ranking() {
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3, delay: 0.05 }}
-        className="flex flex-wrap gap-2 mb-5"
+        className="flex flex-wrap gap-2 mb-3"
       >
         {TABS.map((t) => (
           <button
@@ -235,12 +236,14 @@ export default function Ranking() {
             onClick={() => setTypeId(t.id)}
             className={`px-4 py-2 rounded-lg text-sm font-dana cursor-pointer transition-all duration-200 ${
               typeId === t.id
-                ? 'text-space'
+                ? t.id === 0 ? 'text-amber-900' : 'text-space'
                 : 'bg-surface/60 text-text-muted border border-neon-cyan/10 hover:border-neon-cyan/30 hover:text-text-primary'
             }`}
             style={
               typeId === t.id
-                ? { fontWeight: 900, background: activeMode.color, boxShadow: `0 0 12px ${activeMode.color}30` }
+                ? t.id === 0
+                  ? { fontWeight: 900, background: '#FBBF24', boxShadow: '0 0 12px rgba(251,191,36,0.3)' }
+                  : { fontWeight: 900, background: activeMode.color, boxShadow: `0 0 12px ${activeMode.color}30` }
                 : { fontWeight: 600 }
             }
           >
@@ -248,6 +251,25 @@ export default function Ranking() {
           </button>
         ))}
       </motion.div>
+
+      {/* warning when all selected */}
+      <AnimatePresence>
+        {typeId === 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: -6, height: 0 }}
+            animate={{ opacity: 1, y: 0, height: 'auto' }}
+            exit={{ opacity: 0, y: -6, height: 0 }}
+            transition={{ duration: 0.25 }}
+            className="mb-4 overflow-hidden"
+          >
+            <div className="flex items-start gap-3 px-4 py-3 rounded-xl text-sm font-dana"
+              style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.3)', color: '#FCD34D', fontWeight: 600 }}>
+              <span className="text-base shrink-0">⚠️</span>
+              <span>صندوق‌های انواع مختلف (سهامی، درآمد ثابت، اهرمی و ...) با یکدیگر قابل مقایسه نیستند. رتبه‌بندی در این حالت فقط جهت مرور کلی است.</span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Summary chips */}
       {!loading && rows.length > 0 && (

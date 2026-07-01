@@ -1,8 +1,11 @@
 import { motion } from 'framer-motion'
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import RangePicker from '../components/RangePicker'
+import FipiranLoader from '../components/FipiranLoader'
 import {
   fetchRangeReturns,
+  fetchFundCompare,
   aggregateByCategory,
   faNum,
   fmtPercent,
@@ -60,6 +63,7 @@ export default function Aggregate() {
 
   return (
     <main className="relative min-h-screen overflow-hidden">
+      <FipiranLoader loading={loading} />
       {/* Background */}
       <div className="absolute inset-0 pointer-events-none">
         <div className="absolute top-0 left-1/3 w-[600px] h-[400px] bg-neon-violet/10 blur-[140px] rounded-full" />
@@ -295,8 +299,196 @@ export default function Aggregate() {
           <br />
           مقدار مثبت = ورود پول، مقدار منفی = خروج پول.
         </p>
+
+        {/* Live market data section */}
+        <LiveFlowTable />
       </div>
     </main>
+  )
+}
+
+// ── Live market flow table ────────────────────────────────────────────────────
+const TSE_BASE = '/tsetmc'
+const _liveCache = new Map()
+async function tseGet(path, timeoutMs = 8000) {
+  if (_liveCache.has(path)) return _liveCache.get(path)
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs)
+  try {
+    const r = await fetch(`${TSE_BASE}/${path}`, { signal: ctrl.signal })
+    if (!r.ok) throw new Error(r.status)
+    const d = await r.json()
+    _liveCache.set(path, d)
+    setTimeout(() => _liveCache.delete(path), 60000) // expire after 60s
+    return d
+  } finally { clearTimeout(timer) }
+}
+
+async function fundLiveFlow(insCode) {
+  try {
+    const [ct, pr] = await Promise.all([
+      tseGet(`ClientType/GetClientType/${insCode}/1/0`, 6000),
+      tseGet(`ClosingPrice/GetClosingPriceInfo/${insCode}`, 6000),
+    ])
+    const c = ct.clientType
+    const p = pr.closingPriceInfo
+    if (!c || !p) return 0
+    return ((c.buy_I_Volume ?? 0) - (c.sell_I_Volume ?? 0)) * (p.pClosing ?? 0) / 1e10
+  } catch { return 0 }
+}
+
+const LIVE_TYPES = [
+  { id: 4,  label: 'درآمد ثابت',  route: '/funds/fixed-income',  color: '#00FF9D' },
+  { id: 6,  label: 'سهامی',        route: '/funds/equity',         color: '#00D4FF' },
+  { id: 7,  label: 'مختلط',        route: '/funds/mixed',          color: '#A78BFA' },
+  { id: 5,  label: 'کالایی',       route: '/funds/commodity',      color: '#FBBF24' },
+  { id: 22, label: 'اهرمی',        route: '/funds/leveraged',      color: '#F97316' },
+  { id: 23, label: 'شاخصی',        route: '/funds/index-fund',     color: '#60A5FA' },
+  { id: 21, label: 'بخشی',         route: '/funds/sector',         color: '#34D399' },
+  { id: 11, label: 'بازارگردانی',  route: '/funds/market-maker',   color: '#FB7185' },
+  { id: 12, label: 'جسورانه',      route: '/funds/venture',        color: '#C084FC' },
+]
+
+function LiveFlowTable() {
+  const navigate = useNavigate()
+  const [flows, setFlows] = useState({})
+  const [phase, setPhase] = useState('init') // init | done | error
+  const [ts, setTs] = useState(null)
+  const fundsRef = useRef({})
+
+  const load = useCallback(async () => {
+    try {
+      const snap = await fetchFundCompare(todayISO())
+      for (const cfg of LIVE_TYPES) {
+        fundsRef.current[cfg.id] = snap.funds
+          .filter((f) => f.type === cfg.id && f.isETF && !f.isCharity && f.insCode)
+      }
+      await refresh()
+      setPhase('done')
+    } catch {
+      setPhase('error')
+    }
+  }, [])
+
+  const refresh = useCallback(async () => {
+    const result = {}
+    await Promise.all(LIVE_TYPES.map(async (cfg) => {
+      const list = fundsRef.current[cfg.id] ?? []
+      if (!list.length) { result[cfg.id] = 0; return }
+      const vals = await Promise.all(list.slice(0, 80).map((f) => fundLiveFlow(f.insCode)))
+      result[cfg.id] = vals.reduce((s, v) => s + v, 0)
+    }))
+    setFlows(result)
+    setTs(new Date())
+  }, [])
+
+  useEffect(() => { load() }, [load])
+
+  // Auto-refresh every 90 seconds
+  useEffect(() => {
+    const t = setInterval(() => {
+      _liveCache.clear()
+      refresh()
+    }, 90000)
+    return () => clearInterval(t)
+  }, [refresh])
+
+  const fmtFlow = (v) => {
+    if (!Number.isFinite(v)) return '—'
+    const sign = v >= 0 ? '+' : '−'
+    return sign + faNum(Math.abs(v).toFixed(1))
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, delay: 0.3 }}
+      className="mt-10"
+    >
+      {/* Section header */}
+      <div className="flex items-center justify-between mb-5">
+        <div className="flex items-center gap-3">
+          <div className="w-2 h-2 rounded-full bg-neon-cyan animate-pulse" />
+          <h2 className="text-base font-dana text-white" style={{ fontWeight: 900 }}>
+            دیتای زنده بازار
+          </h2>
+          <span className="text-xs font-dana px-2.5 py-1 rounded-full"
+            style={{ background: 'rgba(0,212,255,0.1)', color: '#00D4FF', border: '1px solid rgba(0,212,255,0.2)', fontWeight: 600 }}>
+            لایو
+          </span>
+        </div>
+        {ts && (
+          <span className="text-xs font-dana text-text-muted/40" style={{ fontWeight: 600 }}>
+            آپدیت: {ts.toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' })}
+          </span>
+        )}
+      </div>
+
+      <div className="rounded-2xl border border-neon-cyan/10 overflow-hidden bg-surface/40 backdrop-blur-sm">
+        {/* Table header */}
+        <div className="grid grid-cols-2 px-4 sm:px-6 py-3 text-xs font-dana text-text-muted border-b border-neon-cyan/10"
+          style={{ fontWeight: 600, background: 'linear-gradient(135deg, rgba(0,212,255,0.05), rgba(124,58,237,0.05))' }}>
+          <span>نوع صندوق</span>
+          <span className="text-center">ورود و خروج پول (م.ت)</span>
+        </div>
+
+        {phase === 'init' && (
+          <div className="flex items-center gap-3 px-6 py-10 justify-center text-text-muted/40">
+            <div className="w-4 h-4 rounded-full border-2 border-neon-cyan/20 border-t-neon-cyan animate-spin" />
+            <span className="text-sm font-dana" style={{ fontWeight: 600 }}>در حال دریافت اطلاعات از مراجع...</span>
+          </div>
+        )}
+
+        {phase === 'error' && (
+          <div className="px-6 py-8 text-center">
+            <p className="text-sm font-dana" style={{ color: '#EF4444', fontWeight: 600 }}>خطا در دریافت</p>
+            <button onClick={load} className="mt-2 text-xs text-neon-cyan font-dana cursor-pointer" style={{ fontWeight: 600 }}>
+              تلاش دوباره
+            </button>
+          </div>
+        )}
+
+        {phase === 'done' && LIVE_TYPES.map((cfg, i) => {
+          const flow = flows[cfg.id] ?? 0
+          const color = flow >= 0 ? '#00FF9D' : '#FF3B6B'
+          const barW = `${Math.min(Math.abs(flow) / 200 * 100, 100)}%`
+          return (
+            <motion.button
+              key={cfg.id}
+              onClick={() => navigate(cfg.route)}
+              initial={{ opacity: 0, x: -6 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: i * 0.04 }}
+              className="w-full grid grid-cols-2 items-center px-4 sm:px-6 py-4 border-b border-neon-cyan/5 hover:bg-neon-cyan/5 transition-colors duration-200 cursor-pointer text-right"
+            >
+              {/* Category */}
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full shrink-0" style={{ background: cfg.color }} />
+                <span className="text-sm font-dana text-text-primary" style={{ fontWeight: 800 }}>{cfg.label}</span>
+                <svg className="w-3 h-3 text-text-muted/30 mr-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </div>
+
+              {/* Flow */}
+              <div className="flex flex-col items-center gap-1">
+                <span className="text-sm font-dana tabular-nums" style={{ fontWeight: 900, color }}>
+                  {fmtFlow(flow)}
+                </span>
+                <div className="w-full max-w-[120px] h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.05)' }}>
+                  <div className="h-full rounded-full" style={{ width: barW, background: color, opacity: 0.6 }} />
+                </div>
+              </div>
+            </motion.button>
+          )
+        })}
+      </div>
+
+      <p className="text-center text-text-muted/40 text-xs font-dana mt-3" style={{ fontWeight: 600 }}>
+        منبع: TSETMC · به‌روزرسانی خودکار هر ۹۰ ثانیه · کلیک برای مشاهده جزئیات
+      </p>
+    </motion.div>
   )
 }
 

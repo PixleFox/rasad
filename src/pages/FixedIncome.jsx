@@ -45,7 +45,6 @@ export default function FixedIncome() {
       setEndISO={setEndISO}
       floatAsset="/assets/satelite.png"
     >
-      {/* Tabs sorted by count descending */}
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}

@@ -3,8 +3,8 @@
   "configurations": [
     {
       "name": "rasad",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeExecutable": "/Users/alireza/Library/Caches/ms-playwright-go/1.50.1/node",
+      "runtimeArgs": ["node_modules/.bin/vite", "--port", "5173"],
       "port": 5173,
       "autoPort": true
     }

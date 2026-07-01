@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Outlet } from 'react-router-dom'
 import { useEffect } from 'react'
 import { fetchFundCompare, todayISO, monthsBeforeISO } from './lib/fipiran'
 import Navbar from './components/Navbar'
@@ -13,14 +13,29 @@ import Leveraged from './pages/Leveraged'
 import Index from './pages/Index'
 import Sector from './pages/Sector'
 import Managers from './pages/Managers'
+import ManagerDashboard from './pages/ManagerDashboard'
 import Marketing from './pages/Marketing'
 import Comparison from './pages/Comparison'
 import About from './pages/About'
 import Ranking from './pages/Ranking'
+import Triggers from './pages/Triggers'
+import LiveFlow from './pages/LiveFlow'
+import MarketMakerFunds from './pages/MarketMakerFunds'
+import VentureFunds from './pages/VentureFunds'
+import OtherFunds from './pages/OtherFunds'
 import ScrollToTop from './components/ScrollToTop'
 
+function MainLayout() {
+  return (
+    <div className="min-h-screen bg-space font-dana" dir="rtl">
+      <Navbar />
+      <Outlet />
+      <Footer />
+    </div>
+  )
+}
+
 export default function App() {
-  // Warm the in-memory cache as soon as the app boots so all pages load instantly
   useEffect(() => {
     const today = todayISO()
     fetchFundCompare(today).catch(() => {})
@@ -30,9 +45,12 @@ export default function App() {
   return (
     <BrowserRouter>
       <ScrollToTop />
-      <div className="min-h-screen bg-space font-dana" dir="rtl">
-        <Navbar />
-        <Routes>
+      <Routes>
+        {/* Standalone pages — no navbar/footer */}
+        <Route path="/triggers" element={<Triggers />} />
+
+        {/* Main layout pages */}
+        <Route element={<MainLayout />}>
           <Route path="/" element={<Home />} />
           <Route path="/aggregate" element={<Aggregate />} />
           <Route path="/funds/fixed-income" element={<FixedIncome />} />
@@ -42,14 +60,18 @@ export default function App() {
           <Route path="/funds/leveraged" element={<Leveraged />} />
           <Route path="/funds/index-fund" element={<Index />} />
           <Route path="/funds/sector" element={<Sector />} />
+          <Route path="/funds/market-maker" element={<MarketMakerFunds />} />
+          <Route path="/funds/venture" element={<VentureFunds />} />
+          <Route path="/funds/other" element={<OtherFunds />} />
+          <Route path="/live-flow" element={<LiveFlow />} />
           <Route path="/managers" element={<Managers />} />
+          <Route path="/managers/:managerId" element={<ManagerDashboard />} />
           <Route path="/marketing" element={<Marketing />} />
           <Route path="/compare" element={<Comparison />} />
           <Route path="/about" element={<About />} />
           <Route path="/ranking" element={<Ranking />} />
-        </Routes>
-        <Footer />
-      </div>
+        </Route>
+      </Routes>
     </BrowserRouter>
   )
 }
