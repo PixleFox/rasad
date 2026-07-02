@@ -19,7 +19,6 @@ export default function FundCategoryPage({
   floatAsset,
   footnote,
   excludeColumns = [],
-  showTotalAUM = true,
 }) {
   const { funds, startDate, endDate, loading, error, startISO, endISO, setStartISO, setEndISO } = useRangeFunds()
 
@@ -62,7 +61,6 @@ export default function FundCategoryPage({
           error={error}
           onRetry={() => setStartISO((d) => d)}
           emptyText="صندوقی یافت نشد."
-          showTotalAUM={showTotalAUM}
         />
       </motion.div>
 

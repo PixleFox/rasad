@@ -1,7 +1,6 @@
 import { useState, useMemo } from 'react'
 import { Download, Search, ChevronDown, ChevronUp } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
-import { fmtSize } from '../lib/fipiran'
 import { exportRowsToCsv } from '../lib/tableExport'
 import PhoneCaptureModal from './PhoneCaptureModal'
 import { getSavedExportPhone, recordExportLead, saveExportPhone } from '../lib/exportLeads'
@@ -28,7 +27,6 @@ export default function FundsTable({
   goodSortKeys = ['score', 'return', 'size', 'years', 'reserve'],
   rowKey = (row, i) => row.regNo ?? row.id ?? i,
   rankField = null, // when set: rank cell shows row[rankField]; medals from row[rankField] value
-  showTotalAUM = false,
   exportFileName = 'funds-table',
   exportEnabled = true,
   searchable = true,
@@ -207,26 +205,6 @@ export default function FundsTable({
             </tr>
           </thead>
           <tbody>
-            {/* Total AUM footer */}
-            {showTotalAUM && !loading && sorted.length > 0 && (() => {
-              const totalRial = sorted.reduce((s, r) => s + (r.sizeRial || 0), 0)
-              const sizeColIdx = allColumns.findIndex((c) => c.key === 'size')
-              return (
-                <tr className="border-t-2 border-neon-cyan/20" style={{ background: 'rgba(0,212,255,0.04)' }}>
-                  {allColumns.map((col, ci) => (
-                    <td key={col.key} className={`py-3 px-3 ${col.align === 'start' ? 'text-right' : 'text-center'}`}>
-                      {ci === 0 ? (
-                        <span className="text-text-muted text-xs font-dana" style={{ fontWeight: 700 }}>مجموع</span>
-                      ) : ci === sizeColIdx ? (
-                        <span className="text-neon-cyan text-sm font-dana tabular-nums" style={{ fontWeight: 900 }}>
-                          {fmtSize(totalRial)}
-                        </span>
-                      ) : null}
-                    </td>
-                  ))}
-                </tr>
-              )
-            })()}
             {loading ? (
               Array.from({ length: 8 }).map((_, i) => (
                 <tr key={i} className="border-t border-neon-cyan/5">

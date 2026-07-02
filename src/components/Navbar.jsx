@@ -125,7 +125,7 @@ function SearchBox({ funds, compact = false, autoFocus = false, onNavigate }) {
             onFocus={() => setFocused(true)}
             onChange={(event) => { setQuery(event.target.value); setFocused(true) }}
             placeholder="نام، نماد یا مدیر صندوق..."
-            className={`w-full rounded-xl border border-neon-cyan/15 bg-surface/80 py-3 pr-10 pl-3 text-sm font-dana text-text-primary outline-none transition-colors placeholder:text-text-muted/60 focus:border-neon-cyan/50 ${compact ? 'h-12' : 'h-10 lg:w-72'}`}
+            className={`w-full rounded-xl border border-neon-cyan/15 bg-surface/80 py-3 pr-10 pl-3 text-sm font-dana text-text-primary outline-none transition-colors placeholder:text-text-muted/60 focus:border-neon-cyan/50 ${compact ? 'h-12' : 'h-10'}`}
             style={{ fontWeight: 600 }}
           />
         </label>
@@ -171,10 +171,10 @@ function DesktopNavItem({ item }) {
     return () => document.removeEventListener('mousedown', close)
   }, [])
 
-  if (!item.sub) return <Link to={item.to} className="whitespace-nowrap text-xs font-dana text-text-muted transition-colors hover:text-neon-cyan" style={{ fontWeight: 700 }}>{item.label}</Link>
+  if (!item.sub) return <Link to={item.to} className="whitespace-nowrap text-[0.65rem] font-dana text-text-muted transition-colors hover:text-neon-cyan xl:text-[0.7rem]" style={{ fontWeight: 700 }}>{item.label}</Link>
   return (
     <div ref={ref} className="relative" onMouseEnter={() => setOpen(true)}>
-      <button type="button" onClick={() => setOpen(!open)} className="flex items-center gap-1 whitespace-nowrap text-xs font-dana text-text-muted hover:text-neon-cyan" style={{ fontWeight: 700 }}>
+      <button type="button" onClick={() => setOpen(!open)} className="flex items-center gap-1 whitespace-nowrap text-[0.65rem] font-dana text-text-muted hover:text-neon-cyan xl:text-[0.7rem]" style={{ fontWeight: 700 }}>
         {item.label}<ChevronDown size={14} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       <div className={`absolute right-0 top-full z-50 pt-3 transition-all ${open ? 'opacity-100' : 'pointer-events-none -translate-y-2 opacity-0'}`} onMouseLeave={() => setOpen(false)}>
@@ -228,8 +228,8 @@ export default function Navbar() {
             <img src="/assets/Logo.png" alt="" className="h-9 w-auto object-contain" style={{ filter: 'drop-shadow(0 0 8px rgba(0,212,255,0.4))' }} />
             <span className="text-xl text-white sm:text-2xl" style={{ fontWeight: 900 }}>رصد</span>
           </Link>
-          <div className="hidden flex-1 items-center justify-center gap-4 lg:flex">{menuItems.slice(0, 6).map((item) => <DesktopNavItem key={item.label} item={item} />)}</div>
-          <div className="hidden w-72 lg:block"><SearchBox funds={funds} /></div>
+          <div className="hidden flex-1 items-center justify-center gap-2 lg:flex xl:gap-3">{menuItems.map((item) => <DesktopNavItem key={item.label} item={item} />)}</div>
+          <div className="hidden w-56 shrink-0 xl:w-64 lg:block"><SearchBox funds={funds} /></div>
           <div className="flex items-center gap-1 lg:hidden">
             <button type="button" onClick={() => setSearchOpen(true)} className="grid h-11 w-11 place-items-center rounded-xl border border-neon-cyan/10 bg-surface/70 text-neon-cyan" aria-label="جستجو"><Search size={21} /></button>
             <button type="button" onClick={() => setMobileOpen(!mobileOpen)} className="grid h-11 w-11 place-items-center rounded-xl border border-neon-cyan/10 bg-surface/70 text-text-primary" aria-label={mobileOpen ? 'بستن منو' : 'باز کردن منو'}>{mobileOpen ? <X size={22} /> : <Menu size={22} />}</button>
