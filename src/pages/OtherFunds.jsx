@@ -4,6 +4,7 @@ import FundsPageLayout from '../components/FundsPageLayout'
 import FundsTable from '../components/FundsTable'
 import { useRangeFunds } from '../hooks/useRangeFunds'
 import { enrichFunds, FUND_TYPES, faNum, fmtSize, fmtPercent } from '../lib/fipiran'
+import FundSummary from '../components/FundSummary'
 
 // انواعی که در منوهای اصلی نیستند
 const OTHER_TYPE_IDS = [13, 16, 17, 18, 24, 25]
@@ -82,6 +83,7 @@ export default function OtherFunds() {
       setEndISO={setEndISO}
     >
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
+        <FundSummary rows={rows} loading={loading} />
         <FundsTable
           columns={columns}
           rows={rows}

@@ -4,6 +4,7 @@ import FundsPageLayout from '../components/FundsPageLayout'
 import FundsTable from '../components/FundsTable'
 import { useRangeFunds } from '../hooks/useRangeFunds'
 import { enrichFunds, faNum, fmtSize, fmtPercent } from '../lib/fipiran'
+import FundSummary from '../components/FundSummary'
 
 const columns = [
   {
@@ -76,6 +77,7 @@ export default function MarketMakerFunds() {
       setEndISO={setEndISO}
     >
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
+        <FundSummary rows={rows} loading={loading} />
         <FundsTable
           columns={columns}
           rows={rows}

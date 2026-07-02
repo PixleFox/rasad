@@ -51,6 +51,7 @@ export default function FundsTable({
   const getRankNum = (row, i) => (rankField != null ? row[rankField] : i + 1)
   // subtle row tint for top-3 when rankField is active
   const getRowStyle = (row) => {
+    if (row.isNew) return { background: 'rgba(0,255,157,0.055)', boxShadow: 'inset -3px 0 #00FF9D' }
     if (rankField == null) return {}
     const tints = ['rgba(255,215,0,0.04)', 'rgba(192,192,192,0.03)', 'rgba(205,127,50,0.03)']
     return row[rankField] >= 1 && row[rankField] <= 3
@@ -102,7 +103,12 @@ export default function FundsTable({
     key: '__rank',
     label: '#',
     thClass: 'w-10',
-    render: (row, i) => <RankCell rank={getRankNum(row, i)} medal={getMedal(row, i)} />,
+    render: (row, i) => (
+      <div className="flex flex-col items-center gap-1">
+        {row.isNew && <span className="whitespace-nowrap rounded bg-neon-green/15 px-1 py-0.5 text-[0.55rem] text-neon-green" title="کمتر از ۳۰ روز از تأسیس">تازه‌تأسیس</span>}
+        <RankCell rank={getRankNum(row, i)} medal={getMedal(row, i)} />
+      </div>
+    ),
   }
   const allColumns = [rankCol, ...columns]
   const exportColumns = allColumns.map((col) => ({

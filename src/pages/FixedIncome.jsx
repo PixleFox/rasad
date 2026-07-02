@@ -6,6 +6,7 @@ import { fixedIncomeColumns } from '../components/fundColumns'
 import { useRangeFunds } from '../hooks/useRangeFunds'
 import { splitFixedIncome, enrichFunds, faNum, fmtPercent } from '../lib/fipiran'
 import { fixedIncomeDeclaredRates } from '../data/fixedIncomeDeclaredRates'
+import FundSummary from '../components/FundSummary'
 
 const TABS = [
   { id: 'etfDividend',          label: 'ETF تقسیم سودی',    badge: 'قابل معامله · با پرداخت سود' },
@@ -161,6 +162,7 @@ export default function FixedIncome() {
       </motion.div>
 
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.1 }}>
+        {!isDeclaredRatesTab && <FundSummary rows={rows} loading={loading} />}
         <FundsTable
           columns={isDeclaredRatesTab ? declaredRateColumns : fixedIncomeColumns}
           rows={rows}

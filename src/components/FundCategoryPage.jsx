@@ -5,6 +5,8 @@ import FundsTable from './FundsTable'
 import { otherFundsColumns } from './fundColumns'
 import { useRangeFunds } from '../hooks/useRangeFunds'
 import { enrichFunds } from '../lib/fipiran'
+import FundSummary from './FundSummary'
+import { useMarketBubbles } from '../hooks/useMarketBubbles'
 
 export default function FundCategoryPage({
   typeId,
@@ -30,6 +32,7 @@ export default function FundCategoryPage({
     () => excludeColumns.length ? otherFundsColumns.filter((c) => !excludeColumns.includes(c.key)) : otherFundsColumns,
     [excludeColumns]
   )
+  const marketRows = useMarketBubbles(rows)
 
   return (
     <FundsPageLayout
@@ -49,9 +52,10 @@ export default function FundCategoryPage({
       floatAsset={floatAsset}
     >
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
+        <FundSummary rows={marketRows} loading={loading} />
         <FundsTable
           columns={columns}
-          rows={rows}
+          rows={marketRows}
           defaultSortKey="score"
           minWidth={900}
           loading={loading}

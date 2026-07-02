@@ -100,17 +100,20 @@ export const otherFundsColumns = [
   COL.years,
   {
     key: 'bubble',
-    label: 'حباب',
-    sortVal: (f) => f.bubble,
-    exportValue: (f) => f.bubble,
+    label: 'حباب NAV بازار',
+    sortVal: (f) => f.marketBubble,
+    exportValue: (f) => f.marketBubble,
     render: (f) => {
-      if (f.bubble == null) return <span className="text-text-muted/40 text-xs">—</span>
-      const v = f.bubble
-      const color = Math.abs(v) < 1 ? '#8A94A6' : v > 0 ? '#FBBF24' : '#00D4FF'
+      if (f.marketBubbleLoading) return <span className="text-text-muted/40 text-xs animate-pulse">...</span>
+      if (f.marketBubble == null) return <span className="text-text-muted/40 text-xs">—</span>
+      const v = f.marketBubble
+      const positive = v > 0
+      const color = Math.abs(v) < 0.1 ? '#8A94A6' : positive ? '#FF3B6B' : '#00D4FF'
       return (
-        <span className="text-sm font-dana tabular-nums" style={{ fontWeight: 700, color }}>
-          {(v >= 0 ? '+' : '−') + faNum(Math.abs(v).toFixed(1)) + '٪'}
-        </span>
+        <div className="flex min-w-[76px] flex-col items-center gap-0.5">
+          <span className="text-sm font-dana tabular-nums" style={{ fontWeight: 800, color }}>{(v >= 0 ? '+' : '') + faNum(v.toFixed(2)) + '٪'}</span>
+          <span className="text-[0.58rem]" style={{ color, fontWeight: 600 }}>{Math.abs(v) < 0.1 ? 'تقریباً بدون حباب' : positive ? 'حباب مثبت' : 'تخفیف نسبت به NAV'}</span>
+        </div>
       )
     },
   },

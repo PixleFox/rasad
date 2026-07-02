@@ -10,8 +10,8 @@ export default function Commodity() {
       highlight="کالایی"
       subtitle="سرمایه‌گذاری در طلا، فلزات و کالاهای اساسی"
       floatAsset="/assets/satelite.png"
-      footnote="منبع: فیپیران · شاخص رصد امتیاز اختصاصی ۱۰ تا ۱۰۰ است · حباب برای صندوق‌های کالایی قابل محاسبه نیست."
-      excludeColumns={['risk', 'bubble']}
+      footnote="منبع: فیپیران و TSETMC · حباب NAV از اختلاف آخرین قیمت معامله و NAV ابطال محاسبه می‌شود."
+      excludeColumns={['risk']}
     />
   )
 }

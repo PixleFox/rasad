@@ -375,6 +375,14 @@ export const yearsSince = (initiation, endISO) => {
   return y > 0 ? y : null
 }
 
+export const isNewFund = (initiation, endISO) => {
+  if (!initiation || !endISO) return false
+  const started = new Date(initiation)
+  const ended = new Date(endISO + 'T23:59:59')
+  const days = (ended - started) / 86400000
+  return Number.isFinite(days) && days >= 0 && days <= 30
+}
+
 // Fund reserve (میلیارد تومان): (statistical − redemption NAV) × units.
 export const reserveBillionToman = (f) =>
   f.statNav && f.cancelNav ? ((f.statNav - f.cancelNav) * f.units) / 1e10 : null
@@ -528,6 +536,7 @@ export function enrichFunds(funds, endISO) {
     bubble:     metrics[i].bubble,
     risk:       metrics[i].risk,
     rasadScore: scores[i] ?? 10,
+    isNew:      isNewFund(f.initiationDate, endISO),
   }))
 }
 
