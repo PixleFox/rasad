@@ -28,28 +28,15 @@ const queueLocally = (payload) => {
 }
 
 export async function recordExportLead({ phone, page, fileName }) {
-  const payload = {
-    p_phone: normalizePhone(phone),
-    p_page: page,
-    p_file_name: fileName,
-  }
-  const url = import.meta.env.VITE_SUPABASE_URL
-  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
-
-  if (!url || !anonKey) {
-    queueLocally({ ...payload, created_at: new Date().toISOString() })
-    return { queued: true }
-  }
-
-  const response = await fetch(`${url}/rest/v1/rpc/register_export`, {
+  const payload = { phone: normalizePhone(phone), page, fileName }
+  const response = await fetch('/api/export-leads', {
     method: 'POST',
-    headers: {
-      apikey: anonKey,
-      Authorization: `Bearer ${anonKey}`,
-      'Content-Type': 'application/json',
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   })
-  if (!response.ok) throw new Error('ثبت شماره انجام نشد')
+  if (!response.ok) {
+    queueLocally({ ...payload, created_at: new Date().toISOString() })
+    throw new Error('ثبت شماره انجام نشد')
+  }
   return { queued: false }
 }
