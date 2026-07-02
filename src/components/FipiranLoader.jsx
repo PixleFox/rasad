@@ -2,10 +2,13 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useState, useEffect } from 'react'
 import { fetchCodalNews } from '../lib/fipiran'
 
+const LOADING_TEXT = 'در حال دریافت اطلاعات از مراجع'
+
 export default function FipiranLoader({ loading }) {
   const [codalNews, setCodalNews] = useState([])
   const [newsIdx, setNewsIdx] = useState(0)
-  const [dots, setDots]       = useState(0)
+  const [dots, setDots]       = useState(1)
+  const [typedLength, setTypedLength] = useState(0)
 
   useEffect(() => {
     fetchCodalNews(80).then(setCodalNews).catch(() => {})
@@ -14,9 +17,30 @@ export default function FipiranLoader({ loading }) {
   useEffect(() => {
     if (!loading) return
     const t1 = setInterval(() => setNewsIdx((i) => (i + 1) % Math.max(codalNews.length, 1)), 2200)
-    const t2 = setInterval(() => setDots((d) => (d + 1) % 4), 500)
-    return () => { clearInterval(t1); clearInterval(t2) }
+    return () => clearInterval(t1)
   }, [loading, codalNews.length])
+
+  useEffect(() => {
+    if (!loading) return
+    setTypedLength(0)
+    setDots(1)
+    const typing = setInterval(() => {
+      setTypedLength((length) => {
+        if (length >= LOADING_TEXT.length) {
+          clearInterval(typing)
+          return length
+        }
+        return length + 1
+      })
+    }, 55)
+    return () => clearInterval(typing)
+  }, [loading])
+
+  useEffect(() => {
+    if (!loading || typedLength < LOADING_TEXT.length) return
+    const dotTimer = setInterval(() => setDots((count) => count === 3 ? 1 : count + 1), 650)
+    return () => clearInterval(dotTimer)
+  }, [loading, typedLength])
 
   return (
     <AnimatePresence>
@@ -89,19 +113,12 @@ export default function FipiranLoader({ loading }) {
 
             {/* Loading text */}
             <div className="h-7 flex items-center justify-center">
-              <AnimatePresence mode="wait">
-                <motion.p
-                  key={dots}
-                  initial={{ opacity: 0, y: 4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -4 }}
-                  transition={{ duration: 0.25 }}
-                  className="text-sm font-dana text-center"
-                  style={{ fontWeight: 700, color: '#00D4FF' }}
-                >
-                  در حال دریافت اطلاعات از مراجع{'.'.repeat(dots + 1)}
-                </motion.p>
-              </AnimatePresence>
+              <p className="text-sm font-dana text-center" style={{ fontWeight: 700, color: '#00D4FF' }}>
+                {LOADING_TEXT.slice(0, typedLength)}
+                {typedLength >= LOADING_TEXT.length && (
+                  <span className="inline-block w-5 text-right" dir="ltr">{'.'.repeat(dots)}</span>
+                )}
+              </p>
             </div>
 
             {/* Progress bar */}
@@ -117,7 +134,7 @@ export default function FipiranLoader({ loading }) {
             {/* Codal news */}
             <div className="w-full mt-2">
               <div className="flex items-center gap-2 mb-2.5 justify-center">
-                <span className="w-1.5 h-1.5 rounded-full bg-neon-cyan/60 inline-block animate-pulse" />
+                <span className="w-1.5 h-1.5 rounded-full bg-neon-cyan/60 inline-block" />
                 <span className="text-[0.65rem] font-dana text-text-muted/50" style={{ fontWeight: 600 }}>
                   آخرین اطلاعیه‌های کدال
                 </span>
