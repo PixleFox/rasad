@@ -4,6 +4,8 @@ dist/
 .env.local
 .env*.local
 *.log
+__pycache__/
+*.pyc
 .DS_Store
 Thumbs.db
 key
