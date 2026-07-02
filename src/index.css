@@ -32,6 +32,22 @@ body {
   overflow-x: hidden;
 }
 
+button,
+a,
+input {
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (max-width: 639px) {
+  body {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .rmdp-container {
+    width: 100%;
+  }
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;

@@ -141,8 +141,8 @@ function BoardQualityTable({ funds, qData }) {
 
   const cols = [
     { key: 'name', label: 'نام صندوق' },
-    { key: 'aum', label: 'دارایی (م.ت)' },
-    { key: 'mm', label: 'بازارگردان (م.ت)', max: 15 },
+    { key: 'aum', label: 'دارایی (میلیارد تومان)' },
+    { key: 'mm', label: 'بازارگردان (میلیارد تومان)', max: 15 },
     { key: 'bubble', label: 'حباب NAV', max: 10 },
     { key: 'vol', label: 'حجم ماهانه', max: 10 },
     { key: 'trd', label: 'تعداد معاملات', max: 5 },
@@ -284,7 +284,7 @@ function BoardQualityView({ funds, loading: fundsLoading }) {
   const dividingFunds   = useMemo(() => fixedIncomeFunds.filter((f) => (f.dividendDays ?? 0) > 0), [fixedIncomeFunds])
   const cumulativeFunds = useMemo(() => fixedIncomeFunds.filter((f) => !((f.dividendDays ?? 0) > 0)), [fixedIncomeFunds])
 
-  // AUM segments for grouping (in م.ت)
+  // AUM segments for grouping (in میلیارد تومان)
   const AUM_SEGS = useMemo(() => {
     const allBT = fixedIncomeFunds.map((f) => f.sizeRial / 1e10).filter((v) => v > 0).sort((a, b) => a - b)
     if (!allBT.length) return []
@@ -324,7 +324,7 @@ function BoardQualityView({ funds, loading: fundsLoading }) {
                   {seg.label}
                 </span>
                 <span className="text-xs text-text-muted font-dana" style={{ fontWeight: 600 }}>
-                  {seg.max === Infinity ? `بالای ${faNum(Math.round(seg.min))} م.ت` : `${faNum(Math.round(seg.min))}–${faNum(Math.round(seg.max))} م.ت`}
+                  {seg.max === Infinity ? `بالای ${faNum(Math.round(seg.min))} میلیارد تومان` : `${faNum(Math.round(seg.min))}–${faNum(Math.round(seg.max))} میلیارد تومان`}
                 </span>
                 <span className="text-xs text-text-muted/40 font-dana">({faNum(segFunds.length)} صندوق)</span>
               </div>
@@ -405,7 +405,7 @@ function BoardQualityView({ funds, loading: fundsLoading }) {
 const fmtHamta = (bt) => {
   const h = bt / 1000
   if (h >= 1) return faNum(h.toFixed(1)) + ' همت'
-  return faNum(Math.round(bt)) + ' م.ت'
+  return faNum(Math.round(bt)) + ' میلیارد تومان'
 }
 
 function SegmentCard({ seg }) {
@@ -734,7 +734,7 @@ const makeMarketingColumns = (catFlow) => [
   },
   {
     key: 'size',
-    label: 'دارایی (م.ت)',
+    label: 'دارایی (میلیارد تومان)',
     sortVal: (f) => f.sizeRial,
     render: (f) => (
       <span className="text-text-primary text-sm font-dana tabular-nums" style={{ fontWeight: 600 }}>
@@ -744,7 +744,7 @@ const makeMarketingColumns = (catFlow) => [
   },
   {
     key: 'flow',
-    label: 'ورود/خروج پول (م.ت)',
+    label: 'ورود/خروج پول (میلیارد تومان)',
     sortVal: (f) => f.flowBT,
     render: (f) => <FlowCell value={f.flowBT} />,
   },
@@ -756,7 +756,7 @@ const makeMarketingColumns = (catFlow) => [
   },
   {
     key: 'delta',
-    label: 'تفاوت (م.ت)',
+    label: 'تفاوت (میلیارد تومان)',
     sortVal: (f) => f.deltaAbsBT,
     render: (f) => <DeltaCell value={f.deltaAbsBT} />,
   },
@@ -949,7 +949,7 @@ function QualityView({ funds, tabId, setTabId, loading: fundsLoading }) {
     },
     {
       key: 'netFlow',
-      label: 'خالص خرید حقیقی (م.ت)',
+      label: 'خالص خرید حقیقی (میلیارد تومان)',
       sortVal: (f) => qData[f.insCode]?.netFlowBT ?? null,
       render: (f) => {
         const d = qData[f.insCode]
@@ -963,14 +963,14 @@ function QualityView({ funds, tabId, setTabId, loading: fundsLoading }) {
             <span className="text-sm font-dana tabular-nums" style={{ fontWeight: 800, color }}>
               {arrow} {faNum(Math.abs(v).toFixed(1))}
             </span>
-            <span className="text-[0.6rem] text-text-muted/50 font-dana" style={{ fontWeight: 600 }}>م.ت</span>
+            <span className="text-[0.6rem] text-text-muted/50 font-dana" style={{ fontWeight: 600 }}>میلیارد تومان</span>
           </div>
         )
       },
     },
     {
       key: 'mmVol',
-      label: 'حجم سفارشات بازارگردان (م.ت)',
+      label: 'حجم سفارشات بازارگردان (میلیارد تومان)',
       sortVal: (f) => qData[f.insCode]?.mmVolBT,
       render: (f) => {
         const d = qData[f.insCode]
@@ -981,7 +981,7 @@ function QualityView({ funds, tabId, setTabId, loading: fundsLoading }) {
             <span className="text-sm font-dana tabular-nums" style={{ fontWeight: 700, color: '#00D4FF' }}>
               {faNum(Math.round(d.mmVolBT))}
             </span>
-            <span className="text-[0.6rem] text-text-muted/50 font-dana" style={{ fontWeight: 600 }}>م.ت دو طرف</span>
+            <span className="text-[0.6rem] text-text-muted/50 font-dana" style={{ fontWeight: 600 }}>میلیارد تومان دو طرف</span>
           </div>
         )
       },
@@ -1031,7 +1031,7 @@ function QualityView({ funds, tabId, setTabId, loading: fundsLoading }) {
             {/* جمع کل خالص خرید حقیقی */}
             <div className="px-4 py-2.5 rounded-xl border flex flex-col gap-0.5"
               style={{ borderColor: netColor + '33', background: netColor + '0d' }}>
-              <span className="text-text-muted text-xs font-dana" style={{ fontWeight: 600 }}>جمع خالص خرید حقیقی (م.ت)</span>
+              <span className="text-text-muted text-xs font-dana" style={{ fontWeight: 600 }}>جمع خالص خرید حقیقی (میلیارد تومان)</span>
               <span className="text-base font-dana tabular-nums" style={{ fontWeight: 900, color: netColor }}>
                 {netArrow} {faNum(Math.abs(netFlowSum).toFixed(1))}
               </span>
@@ -1301,7 +1301,7 @@ export default function Marketing() {
           {[
             {
               label: 'جریان خالص دسته',
-              value: (catFlow >= 0 ? '+' : '') + faNum(catFlow.toFixed(0)) + ' م.ت',
+              value: (catFlow >= 0 ? '+' : '') + faNum(catFlow.toFixed(0)) + ' میلیارد تومان',
               color: catFlow >= 0 ? '#00FF9D' : '#FF3B6B',
             },
             { label: 'تعداد صندوق', value: faNum(rows.length), color: '#8A94A6' },
@@ -1343,7 +1343,7 @@ export default function Marketing() {
       </motion.div>
 
       <p className="text-center text-text-muted text-xs font-dana mt-5 leading-relaxed" style={{ fontWeight: 600 }}>
-        منبع: فیپیران · تفاوت = جریان واقعی − جریان مورد انتظار بر اساس سهم بازار ابتدای بازه · م.ت = میلیارد تومان
+        منبع: فیپیران · تفاوت = جریان واقعی − جریان مورد انتظار بر اساس سهم بازار ابتدای بازه · میلیارد تومان = میلیارد تومان
       </p>
 
       </>)}

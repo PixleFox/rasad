@@ -53,13 +53,13 @@ const yearsCell = (f) => (
 )
 
 const COL = {
-  name: { key: 'name', label: 'نام صندوق', align: 'start', render: nameCell },
-  symbol: { key: 'symbol', label: 'نماد', render: symbolCell },
-  size: { key: 'size', label: 'دارایی (میلیارد تومان)', sortVal: (f) => f.sizeRial, render: sizeCell },
-  return: { key: 'return', label: 'بازدهی در بازه', sortVal: (f) => f.rangeReturn, render: returnCell },
-  years: { key: 'years', label: 'سابقه', sortVal: (f) => f.years, render: yearsCell },
-  score: { key: 'score', label: 'شاخص رصد', sortVal: (f) => f.rasadScore, render: (f) => <ScorePill score={f.rasadScore} /> },
-  site: { key: 'site', label: 'سایت', render: (f) => <SiteLink url={f.website} /> },
+  name: { key: 'name', label: 'نام صندوق', align: 'start', render: nameCell, exportValue: (f) => f.name },
+  symbol: { key: 'symbol', label: 'نماد', render: symbolCell, exportValue: (f) => f.symbol },
+  size: { key: 'size', label: 'دارایی (میلیارد تومان)', sortVal: (f) => f.sizeRial, render: sizeCell, exportValue: (f) => Math.round((f.sizeRial || 0) / 1e10) },
+  return: { key: 'return', label: 'بازدهی در بازه', sortVal: (f) => f.rangeReturn, render: returnCell, exportValue: (f) => f.rangeReturn },
+  years: { key: 'years', label: 'سابقه', sortVal: (f) => f.years, render: yearsCell, exportValue: (f) => f.years },
+  score: { key: 'score', label: 'شاخص رصد', sortVal: (f) => f.rasadScore, render: (f) => <ScorePill score={f.rasadScore} />, exportValue: (f) => f.rasadScore },
+  site: { key: 'site', label: 'سایت', render: (f) => <SiteLink url={f.website} />, exportValue: (f) => f.website },
 }
 
 // درآمد ثابت: adds reserve (ذخیره صندوق)
@@ -73,6 +73,7 @@ export const fixedIncomeColumns = [
     key: 'reserve',
     label: 'ذخیره صندوق (میلیارد تومان)',
     sortVal: (f) => f.reserve,
+    exportValue: (f) => f.reserve,
     render: (f) =>
       f.reserve != null ? (
         <span
@@ -95,12 +96,13 @@ export const otherFundsColumns = [
   COL.symbol,
   COL.size,
   COL.return,
-  { key: 'risk', label: 'سطح ریسک دارایی', sortVal: (f) => f.risk, render: (f) => <RiskMeter value={f.risk} /> },
+  { key: 'risk', label: 'سطح ریسک دارایی', sortVal: (f) => f.risk, render: (f) => <RiskMeter value={f.risk} />, exportValue: (f) => f.risk },
   COL.years,
   {
     key: 'bubble',
     label: 'حباب',
     sortVal: (f) => f.bubble,
+    exportValue: (f) => f.bubble,
     render: (f) => {
       if (f.bubble == null) return <span className="text-text-muted/40 text-xs">—</span>
       const v = f.bubble

@@ -224,7 +224,7 @@ export default function Triggers() {
               gap: '8px',
             }}>
               <span>نوع صندوق</span>
-              <span className="text-center">امروز (م.ت)</span>
+              <span className="text-center">امروز (میلیارد تومان)</span>
               <span className="text-center">میانگین ۲۰ روز</span>
               <span className="text-center">حد تریگر</span>
               <span className="text-center">وضعیت</span>

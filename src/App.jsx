@@ -27,7 +27,7 @@ import ScrollToTop from './components/ScrollToTop'
 
 function MainLayout() {
   return (
-    <div className="min-h-screen bg-space font-dana" dir="rtl">
+    <div className="min-h-screen bg-space pb-20 font-dana lg:pb-0" dir="rtl">
       <Navbar />
       <Outlet />
       <Footer />

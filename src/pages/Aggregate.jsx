@@ -430,7 +430,7 @@ function LiveFlowTable() {
         <div className="grid grid-cols-2 px-4 sm:px-6 py-3 text-xs font-dana text-text-muted border-b border-neon-cyan/10"
           style={{ fontWeight: 600, background: 'linear-gradient(135deg, rgba(0,212,255,0.05), rgba(124,58,237,0.05))' }}>
           <span>نوع صندوق</span>
-          <span className="text-center">ورود و خروج پول (م.ت)</span>
+          <span className="text-center">ورود و خروج پول (میلیارد تومان)</span>
         </div>
 
         {phase === 'init' && (

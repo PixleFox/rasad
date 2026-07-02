@@ -511,7 +511,7 @@ export function enrichFunds(funds, endISO) {
       if (f.isETF && bub != null && Math.abs(bub) > 10)
         penalty += Math.min((Math.abs(bub) - 10) / 20, 0.25)
 
-      // ۳. صندوق خیلی کوچک (زیر ۵۰۰ میلیارد تومان = ۵e12 ریال)
+      // ۳. صندوق خیلی کوچک (زیر ۵۰۰ میلیارد تومان)
       const tooSmall = f.sizeRial > 0 && f.sizeRial < 5e12
       const score01 = Math.max(0, raw - penalty)
       let rasadScore = Math.max(10, Math.min(100, Math.round(10 + score01 * 90)))

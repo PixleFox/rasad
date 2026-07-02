@@ -11,12 +11,12 @@ const persian_fa = persianFaNS?.default ?? persianFaNS
 const objToISO = (d) => dateToISO(d.toDate())
 
 const inputClass =
-  'bg-surface/70 border border-neon-cyan/20 rounded-lg px-3 py-2 text-sm text-text-primary font-dana cursor-pointer hover:border-neon-cyan/40 focus:border-neon-cyan/60 focus:outline-none transition-colors duration-200 w-32 text-center'
+  'bg-surface/70 border border-neon-cyan/20 rounded-lg px-2 py-2 text-xs sm:text-sm text-text-primary font-dana cursor-pointer hover:border-neon-cyan/40 focus:border-neon-cyan/60 focus:outline-none transition-colors duration-200 w-full text-center'
 
 export default function RangePicker({ startISO, endISO, onStart, onEnd }) {
   return (
-    <div className="flex items-end gap-3">
-      <div className="flex flex-col gap-1">
+    <div className="grid w-full grid-cols-2 items-end gap-2 sm:flex sm:w-auto sm:gap-3">
+      <div className="flex min-w-0 flex-col gap-1 sm:w-32">
         <label className="text-text-muted text-xs font-dana" style={{ fontWeight: 600 }}>
           از تاریخ
         </label>
@@ -32,7 +32,7 @@ export default function RangePicker({ startISO, endISO, onStart, onEnd }) {
           editable={false}
         />
       </div>
-      <div className="flex flex-col gap-1">
+      <div className="flex min-w-0 flex-col gap-1 sm:w-32">
         <label className="text-text-muted text-xs font-dana" style={{ fontWeight: 600 }}>
           تا تاریخ
         </label>

@@ -51,30 +51,30 @@ export default function FundsPageLayout({
         />
       )}
 
-      <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 pt-28 pb-24">
+      <div className="relative z-10 mx-auto max-w-6xl px-3 pb-14 pt-20 sm:px-6 sm:pb-20 sm:pt-24 lg:pb-24 lg:pt-28">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 mb-10"
+          className="mb-6 flex flex-col justify-between gap-4 sm:mb-8 lg:mb-10 lg:flex-row lg:items-end lg:gap-6"
         >
           <div>
             <div
-              className="inline-flex items-center gap-2 mb-3 px-4 py-1.5 rounded-full border"
+              className="mb-2 inline-flex items-center gap-2 rounded-full border px-3 py-1 sm:mb-3 sm:px-4 sm:py-1.5"
               style={{ borderColor: `${accentColor}4D`, background: `${accentColor}0D` }}
             >
               <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: accentColor }} />
-              <span className="text-sm font-dana" style={{ fontWeight: 600, color: accentColor }}>
+              <span className="text-xs font-dana sm:text-sm" style={{ fontWeight: 600, color: accentColor }}>
                 {badge}
               </span>
             </div>
-            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-dana text-white" style={{ fontWeight: 900 }}>
+            <h1 className="text-2xl font-dana text-white sm:text-4xl lg:text-5xl" style={{ fontWeight: 900 }}>
               {title}{' '}
               <span style={{ color: accentColor, textShadow: `0 0 30px ${accentColor}80` }}>{highlight}</span>{' '}
               {titleTail}
             </h1>
-            <p className="text-text-muted text-sm sm:text-base font-dana mt-3 max-w-xl leading-relaxed" style={{ fontWeight: 600 }}>
+            <p className="mt-2 max-w-xl text-xs leading-6 text-text-muted sm:mt-3 sm:text-base" style={{ fontWeight: 600 }}>
               {loading ? (
                 <span className="inline-flex items-center gap-2 text-neon-cyan">
                   <span className="w-3 h-3 rounded-full border-2 border-neon-cyan/30 border-t-neon-cyan animate-spin" />

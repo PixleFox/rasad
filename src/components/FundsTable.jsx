@@ -1,5 +1,10 @@
 import { useState, useMemo } from 'react'
+import { Download, Search, ChevronDown, ChevronUp } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
 import { fmtSize } from '../lib/fipiran'
+import { exportRowsToCsv } from '../lib/tableExport'
+import PhoneCaptureModal from './PhoneCaptureModal'
+import { getSavedExportPhone, recordExportLead, saveExportPhone } from '../lib/exportLeads'
 
 const MEDAL = {
   0: { icon: '🏆', color: '#FFD700', shadow: '#FFD70060' },
@@ -24,9 +29,17 @@ export default function FundsTable({
   rowKey = (row, i) => row.regNo ?? row.id ?? i,
   rankField = null, // when set: rank cell shows row[rankField]; medals from row[rankField] value
   showTotalAUM = false,
+  exportFileName = 'funds-table',
+  exportEnabled = true,
+  searchable = true,
+  searchPlaceholder = 'جستجو در جدول...',
 }) {
   const [sortKey, setSortKey] = useState(defaultSortKey ?? null)
   const [sortDir, setSortDir] = useState(defaultSortDir)
+  const [searchParams] = useSearchParams()
+  const [query, setQuery] = useState(() => searchParams.get('q') || '')
+  const [phoneModalOpen, setPhoneModalOpen] = useState(false)
+  const [exportBusy, setExportBusy] = useState(false)
 
   const getMedal = (row, i) => {
     if (rankField != null) {
@@ -45,19 +58,35 @@ export default function FundsTable({
       : {}
   }
 
+  const filteredRows = useMemo(() => {
+    const normalized = query.trim().toLowerCase()
+    if (!searchable || !normalized) return rows
+    return rows.filter((row) => {
+      const values = columns.flatMap((col) => {
+        const exported = col.exportValue?.(row)
+        return [exported, row[col.key]]
+      })
+      return values
+        .filter((value) => value != null)
+        .join(' ')
+        .toLowerCase()
+        .includes(normalized)
+    })
+  }, [rows, columns, query, searchable])
+
   const sorted = useMemo(() => {
-    if (!sortKey) return rows
+    if (!sortKey) return filteredRows
     const col = columns.find((c) => c.key === sortKey)
-    if (!col?.sortVal) return rows
+    if (!col?.sortVal) return filteredRows
     const dir = sortDir === 'asc' ? 1 : -1
-    return [...rows].sort((a, b) => {
+    return [...filteredRows].sort((a, b) => {
       const va = col.sortVal(a)
       const vb = col.sortVal(b)
       if (va == null) return 1
       if (vb == null) return -1
       return (va - vb) * dir
     })
-  }, [rows, sortKey, sortDir, columns])
+  }, [filteredRows, sortKey, sortDir, columns])
 
   const toggleSort = (col) => {
     if (!col.sortVal) return
@@ -76,9 +105,73 @@ export default function FundsTable({
     render: (row, i) => <RankCell rank={getRankNum(row, i)} medal={getMedal(row, i)} />,
   }
   const allColumns = [rankCol, ...columns]
+  const exportColumns = allColumns.map((col) => ({
+    ...col,
+    exportValue: col.exportValue || ((row, i) => {
+      if (col.key === '__rank') return getRankNum(row, i)
+      const value = row[col.key]
+      if (value == null && col.sortVal) return col.sortVal(row)
+      return value
+    }),
+  }))
+  const canExport = exportEnabled && !loading && !error && sorted.length > 0
+  const finishExport = async (phone) => {
+    setExportBusy(true)
+    try {
+      await recordExportLead({ phone, page: window.location.pathname, fileName: exportFileName })
+    } catch {
+      // The export remains available if the lead service is temporarily unavailable.
+    } finally {
+      setExportBusy(false)
+      setPhoneModalOpen(false)
+    }
+    exportRowsToCsv({ columns: exportColumns, rows: sorted, fileName: exportFileName })
+  }
+  const handleExport = () => {
+    if (!canExport) return
+    const savedPhone = getSavedExportPhone()
+    if (savedPhone) finishExport(savedPhone)
+    else setPhoneModalOpen(true)
+  }
 
   return (
     <div className="rounded-2xl border border-neon-cyan/10 bg-surface/40 backdrop-blur-sm overflow-hidden">
+      <PhoneCaptureModal
+        open={phoneModalOpen}
+        busy={exportBusy}
+        onClose={() => setPhoneModalOpen(false)}
+        onSubmit={(phone) => finishExport(saveExportPhone(phone))}
+      />
+      {(exportEnabled || searchable) && (
+        <div className="flex flex-col gap-2 px-3 py-2 border-b border-neon-cyan/10 sm:flex-row sm:items-center sm:justify-between" dir="ltr">
+          {exportEnabled && (
+          <button
+            type="button"
+            onClick={handleExport}
+            disabled={!canExport}
+            className="inline-flex items-center gap-2 rounded-lg border border-neon-green/30 bg-neon-green/10 px-3 py-1.5 text-xs font-dana text-neon-green transition-colors hover:border-neon-green/60 hover:bg-neon-green/15 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/5 disabled:text-text-muted/50"
+            style={{ fontWeight: 700 }}
+            title="خروجی اکسل"
+            dir="rtl"
+          >
+            <Download size={15} aria-hidden="true" />
+            خروجی اکسل
+          </button>
+          )}
+          {searchable && (
+            <label className="relative flex-1 sm:max-w-xs" dir="rtl">
+              <Search size={15} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-text-muted/70" />
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder={searchPlaceholder}
+                className="w-full rounded-lg border border-neon-cyan/15 bg-space/45 py-2 pr-8 pl-3 text-xs font-dana text-text-primary outline-none transition-colors placeholder:text-text-muted/60 focus:border-neon-cyan/50"
+                style={{ fontWeight: 600 }}
+              />
+            </label>
+          )}
+        </div>
+      )}
       <div className="overflow-x-auto">
         <table className="w-full border-collapse" style={{ minWidth }}>
           <thead>
@@ -100,7 +193,7 @@ export default function FundsTable({
                   <span className="inline-flex items-center gap-1">
                     {col.label}
                     {col.sortVal && sortKey === col.key && (
-                      <span className="text-neon-cyan text-[0.6rem]">{sortDir === 'desc' ? '▼' : '▲'}</span>
+                      <span className="text-neon-cyan">{sortDir === 'desc' ? <ChevronDown size={13} /> : <ChevronUp size={13} />}</span>
                     )}
                   </span>
                 </th>
@@ -152,7 +245,7 @@ export default function FundsTable({
             ) : sorted.length === 0 ? (
               <tr>
                 <td colSpan={allColumns.length} className="py-16 text-center text-text-muted text-sm font-dana" style={{ fontWeight: 600 }}>
-                  {emptyText || 'صندوقی یافت نشد.'}
+                  {query.trim() ? 'نتیجه‌ای برای جستجو پیدا نشد.' : emptyText || 'صندوقی یافت نشد.'}
                 </td>
               </tr>
             ) : (

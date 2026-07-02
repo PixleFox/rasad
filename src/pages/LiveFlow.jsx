@@ -35,8 +35,8 @@ async function fetchFundLive(insCode) {
   const volume = p.qTotTran5J ?? 0
 
   return {
-    netFlow:      (netVol * pClose) / 1e10,          // ورود پول (م.ت)
-    tradeValue:   (volume * pClose) / 1e10,           // ارزش معاملات (م.ت)
+    netFlow:      (netVol * pClose) / 1e10,          // ورود پول (میلیارد تومان)
+    tradeValue:   (volume * pClose) / 1e10,           // ارزش معاملات (میلیارد تومان)
     changeLast:   pYest > 0 ? ((pLast  - pYest) / pYest) * 100 : null, // درصد آخرین
     changeClose:  pYest > 0 ? ((pClose - pYest) / pYest) * 100 : null, // درصد پایانی
   }
@@ -156,13 +156,13 @@ export default function LiveFlow() {
   const flowCell = (v) => {
     if (!Number.isFinite(v)) return <span className="text-text-muted/40">—</span>
     const color = v > 0 ? '#00FF9D' : v < 0 ? '#FF3B6B' : '#8A94A6'
-    return <span className="tabular-nums font-dana text-sm" style={{ fontWeight: 800, color }}>{(v > 0 ? '+' : '') + fa(v)}م.ت</span>
+    return <span className="tabular-nums font-dana text-sm" style={{ fontWeight: 800, color }}>{(v > 0 ? '+' : '') + fa(v)} میلیارد تومان</span>
   }
 
   const COLS = [
     { key: 'symbol',      label: 'نماد',             sort: false },
-    { key: 'netFlow',     label: 'ورود پول (م.ت)',    sort: true  },
-    { key: 'tradeValue',  label: 'ارزش معاملات (م.ت)', sort: true },
+    { key: 'netFlow',     label: 'ورود پول (میلیارد تومان)',    sort: true  },
+    { key: 'tradeValue',  label: 'ارزش معاملات (میلیارد تومان)', sort: true },
     { key: 'changeLast',  label: 'درصد آخرین',        sort: true  },
     { key: 'changeClose', label: 'درصد پایانی',       sort: true  },
   ]
@@ -296,7 +296,7 @@ export default function LiveFlow() {
                         {/* ارزش معاملات */}
                         <td className="px-4 py-3">
                           {Number.isFinite(f.tradeValue)
-                            ? <span className="tabular-nums font-dana text-sm text-text-primary" style={{ fontWeight: 600 }}>{fa(f.tradeValue)}م.ت</span>
+                            ? <span className="tabular-nums font-dana text-sm text-text-primary" style={{ fontWeight: 600 }}>{fa(f.tradeValue)} میلیارد تومان</span>
                             : <span className="text-text-muted/40">—</span>}
                         </td>
                         {/* درصد آخرین */}

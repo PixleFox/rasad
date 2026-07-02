@@ -14,7 +14,7 @@ const PARAMS = [
 
   // ─ Performance
   {
-    key: 'size', label: 'دارایی (م.ت)', section: 'عملکرد',
+    key: 'size', label: 'دارایی (میلیارد تومان)', section: 'عملکرد',
     getValue: f => f.sizeRial, higherBetter: true,
     render: f => <span className="font-dana tabular-nums text-text-primary" style={{ fontWeight: 700 }}>{fmtSize(f.sizeRial)}</span>,
   },

@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { Link } from 'react-router-dom'
+import { AtSign, BriefcaseBusiness, ChevronDown, Send } from 'lucide-react'
 
 const links = {
   'صندوق‌ها': [
@@ -22,110 +24,68 @@ const links = {
   ],
 }
 
+const socials = [
+  { label: 'توییتر', icon: AtSign },
+  { label: 'لینکدین', icon: BriefcaseBusiness },
+  { label: 'تلگرام', icon: Send },
+]
+
 export default function Footer() {
-  const year = '۱۴۰۴'
+  const [openSection, setOpenSection] = useState(null)
 
   return (
-    <footer className="relative border-t border-neon-cyan/10 bg-surface/30 backdrop-blur-sm overflow-hidden">
-      {/* Top glow line */}
-      <div
-        className="absolute top-0 left-0 right-0 h-px"
-        style={{ background: 'linear-gradient(90deg, transparent, rgba(0,212,255,0.5), transparent)' }}
-      />
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="grid grid-cols-1 md:grid-cols-5 gap-10"
-        >
-          {/* Brand */}
+    <footer className="relative overflow-hidden border-t border-neon-cyan/10 bg-surface/30 backdrop-blur-sm">
+      <div className="absolute top-0 right-0 left-0 h-px bg-gradient-to-r from-transparent via-neon-cyan/50 to-transparent" />
+      <div className="mx-auto max-w-7xl px-4 py-7 sm:px-6 sm:py-12 lg:px-8 lg:py-16">
+        <motion.div initial={{ opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="grid grid-cols-1 gap-6 md:grid-cols-5 md:gap-10">
           <div className="md:col-span-2">
-            <div className="flex items-center gap-2 mb-4">
-              <img
-                src="/assets/Logo.png"
-                alt=""
-                className="h-9 w-auto object-contain"
-                style={{ filter: 'drop-shadow(0 0 8px rgba(0,212,255,0.4))' }}
-              />
-              <span
-                className="text-2xl font-dana text-white"
-                style={{ fontWeight: 900, textShadow: '0 0 20px rgba(0,212,255,0.4)' }}
-              >
-                رصد
-              </span>
+            <div className="mb-3 flex items-center gap-2">
+              <img src="/assets/Logo.png" alt="" className="h-8 w-auto object-contain" />
+              <span className="text-xl text-white" style={{ fontWeight: 900 }}>رصد</span>
             </div>
-
-            <p className="text-text-muted text-sm font-dana leading-relaxed mb-6 max-w-xs" style={{ fontWeight: 600 }}>
-              پلتفرم جامع تحلیل و مقایسه صندوق‌های سرمایه‌گذاری ایران. رصد با دقت رصدخانه، با سرعت نور.
+            <p className="mb-4 max-w-sm text-xs leading-6 text-text-muted sm:mb-6 sm:max-w-xs sm:text-sm" style={{ fontWeight: 600 }}>
+              پلتفرم جامع تحلیل و مقایسه صندوق‌های سرمایه‌گذاری ایران؛ داده‌های شفاف برای تصمیم‌های بهتر.
             </p>
-
-            {/* Social links */}
-            <div className="flex gap-3">
-              {[
-                { label: 'توییتر', icon: (
-                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-                  </svg>
-                )},
-                { label: 'لینکدین', icon: (
-                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
-                  </svg>
-                )},
-                { label: 'تلگرام', icon: (
-                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z" />
-                  </svg>
-                )},
-              ].map((s) => (
-                <a
-                  key={s.label}
-                  href="#"
-                  aria-label={s.label}
-                  className="w-9 h-9 rounded-lg border border-neon-cyan/10 bg-surface/60 flex items-center justify-center text-text-muted hover:text-neon-cyan hover:border-neon-cyan/40 transition-all duration-200 cursor-pointer"
-                >
-                  {s.icon}
+            <div className="flex gap-2">
+              {socials.map(({ label, icon: Icon }) => (
+                <a key={label} href="#" aria-label={label} className="grid h-9 w-9 place-items-center rounded-lg border border-neon-cyan/10 bg-surface/60 text-text-muted transition-colors hover:border-neon-cyan/40 hover:text-neon-cyan">
+                  <Icon size={16} />
                 </a>
               ))}
             </div>
           </div>
 
-          {/* Links */}
           {Object.entries(links).map(([title, items]) => (
-            <div key={title}>
-              <h4 className="text-white text-sm font-dana mb-4" style={{ fontWeight: 900 }}>
-                {title}
-              </h4>
+            <div key={title} className="hidden md:block">
+              <h4 className="mb-4 text-sm text-white" style={{ fontWeight: 900 }}>{title}</h4>
               <ul className="space-y-2.5">
-                {items.map((item) => (
-                  <li key={item.label}>
-                    <Link
-                      to={item.to}
-                      className="text-text-muted text-sm font-dana hover:text-neon-cyan transition-colors duration-150 cursor-pointer"
-                      style={{ fontWeight: 600 }}
-                    >
-                      {item.label}
-                    </Link>
-                  </li>
-                ))}
+                {items.map((item) => <li key={item.label}><Link to={item.to} className="text-sm text-text-muted transition-colors hover:text-neon-cyan" style={{ fontWeight: 600 }}>{item.label}</Link></li>)}
               </ul>
             </div>
           ))}
+
+          <div className="divide-y divide-neon-cyan/10 border-y border-neon-cyan/10 md:hidden">
+            {Object.entries(links).map(([title, items]) => {
+              const open = openSection === title
+              return (
+                <div key={title}>
+                  <button type="button" onClick={() => setOpenSection(open ? null : title)} className="flex h-11 w-full items-center justify-between text-sm text-white" style={{ fontWeight: 800 }} aria-expanded={open}>
+                    {title}<ChevronDown size={17} className={`text-text-muted transition-transform ${open ? 'rotate-180' : ''}`} />
+                  </button>
+                  <div className={`grid overflow-hidden transition-all ${open ? 'grid-rows-[1fr] pb-3' : 'grid-rows-[0fr]'}`}>
+                    <ul className="grid min-h-0 grid-cols-2 gap-x-4 gap-y-1 overflow-hidden">
+                      {items.map((item) => <li key={item.label}><Link to={item.to} className="block py-1.5 text-xs text-text-muted" style={{ fontWeight: 600 }}>{item.label}</Link></li>)}
+                    </ul>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         </motion.div>
 
-        {/* Bottom bar */}
-        <div className="mt-12 pt-6 border-t border-neon-cyan/10 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <p className="text-text-muted text-xs font-dana text-center sm:text-right" style={{ fontWeight: 600 }}>
-            © {year} رصد. تمامی حقوق محفوظ است.
-          </p>
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-neon-green animate-pulse" />
-            <span className="text-neon-green text-xs font-dana" style={{ fontWeight: 600 }}>
-              سیستم آنلاین و فعال
-            </span>
-          </div>
+        <div className="mt-5 flex flex-col items-center justify-between gap-2 border-t border-neon-cyan/10 pt-4 sm:mt-12 sm:flex-row sm:gap-4 sm:pt-6">
+          <p className="text-center text-[0.68rem] text-text-muted sm:text-right" style={{ fontWeight: 600 }}>© ۱۴۰۴ رصد. تمامی حقوق محفوظ است.</p>
+          <div className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-neon-green" /><span className="text-[0.68rem] text-neon-green" style={{ fontWeight: 600 }}>سیستم آنلاین و فعال</span></div>
         </div>
       </div>
     </footer>

@@ -127,7 +127,7 @@ const AUM_COLUMNS = [
   },
   {
     key: 'value',
-    label: 'دارایی (م.ت)',
+    label: 'دارایی (میلیارد تومان)',
     sortVal: (f) => f.value,
     render: (f) =>
       f.value != null
@@ -313,7 +313,7 @@ export default function Ranking() {
       </motion.div>
 
       <p className="text-center text-text-muted text-xs font-dana mt-5 leading-relaxed" style={{ fontWeight: 600 }}>
-        منبع: فیپیران · تغییر رتبه نسبت به بازه مشابه قبلی محاسبه می‌شود · م.ت = میلیارد تومان
+        منبع: فیپیران · تغییر رتبه نسبت به بازه مشابه قبلی محاسبه می‌شود · میلیارد تومان = میلیارد تومان
       </p>
     </FundsPageLayout>
   )

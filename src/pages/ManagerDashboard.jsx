@@ -110,21 +110,23 @@ export default function ManagerDashboard() {
       ),
     },
     {
-      key: 'aum', label: 'دارایی خالص (میلیارد ریال)', sortVal: (f) => f.sizeRial,
+      key: 'aum', label: 'دارایی خالص (میلیارد تومان)', sortVal: (f) => f.sizeRial,
       render: (f) => (
         <span className="text-text-primary text-sm font-dana tabular-nums" style={{ fontWeight: 700 }}>
-          {f.sizeRial > 0 ? faNum(Math.round(f.sizeRial / 1e9)) : '—'}
+          {f.sizeRial > 0 ? faNum(Math.round(f.sizeRial / 1e10)) : '—'}
         </span>
       ),
+      exportValue: (f) => (f.sizeRial > 0 ? Math.round(f.sizeRial / 1e10) : null),
     },
     {
-      key: 'flow', label: 'خالص ورود و خروج پول (میلیارد ریال)',
-      sortVal: (f) => (Number.isFinite(f.unitsStart) && f.navRet > 0 ? (f.units - f.unitsStart) * f.navRet / 1e9 : null),
+      key: 'flow', label: 'خالص ورود و خروج پول (میلیارد تومان)',
+      sortVal: (f) => (Number.isFinite(f.unitsStart) && f.navRet > 0 ? (f.units - f.unitsStart) * f.navRet / 1e10 : null),
       render: (f) => {
         const v = Number.isFinite(f.unitsStart) && f.navRet > 0
-          ? Math.round((f.units - f.unitsStart) * f.navRet / 1e9) : null
+          ? Math.round((f.units - f.unitsStart) * f.navRet / 1e10) : null
         return <FlowCell value={v} />
       },
+      exportValue: (f) => (Number.isFinite(f.unitsStart) && f.navRet > 0 ? Math.round((f.units - f.unitsStart) * f.navRet / 1e10) : null),
     },
   ]
 
@@ -269,7 +271,7 @@ export default function ManagerDashboard() {
           emptyText="صندوقی یافت نشد"
         />
         <p className="text-left text-text-muted text-xs font-dana mt-2" style={{ fontWeight: 600 }}>
-          اعداد به میلیارد ریال می‌باشد.
+          اعداد به میلیارد تومان می‌باشد.
         </p>
 
         {/* table 1 totals */}
@@ -278,13 +280,13 @@ export default function ManagerDashboard() {
             <div className="flex flex-col gap-0.5">
               <span className="text-text-muted text-xs font-dana" style={{ fontWeight: 600 }}>جمع کل دارایی‌ها</span>
               <span className="text-text-primary text-base font-dana tabular-nums" style={{ fontWeight: 900 }}>
-                {faNum(Math.round(summary.aumBT * 1000))} <span className="text-xs text-text-muted">میلیارد ریال</span>
+                {faNum(Math.round(summary.aumBT))} <span className="text-xs text-text-muted">میلیارد تومان</span>
               </span>
             </div>
             <div className="flex flex-col gap-0.5">
               <span className="text-text-muted text-xs font-dana" style={{ fontWeight: 600 }}>جمع خالص جریان نقدی</span>
               <span className="text-base font-dana tabular-nums" style={{ fontWeight: 900, color: summary.flowBT >= 0 ? '#00FF9D' : '#FF3B6B' }}>
-                {summary.flowBT >= 0 ? '▲' : '▼'} {faNum(Math.abs(Math.round(summary.flowBT * 1000)))} <span className="text-xs text-text-muted">میلیارد ریال</span>
+                {summary.flowBT >= 0 ? '▲' : '▼'} {faNum(Math.abs(Math.round(summary.flowBT)))} <span className="text-xs text-text-muted">میلیارد تومان</span>
               </span>
             </div>
           </div>

@@ -26,7 +26,7 @@ const columns = [
   },
   {
     key: 'size',
-    label: 'دارایی (م.ت)',
+    label: 'دارایی (میلیارد تومان)',
     sortVal: (f) => f.sizeRial,
     render: (f) => <span className="text-text-primary text-sm font-dana tabular-nums" style={{ fontWeight: 700 }}>{fmtSize(f.sizeRial)}</span>,
   },
