@@ -103,9 +103,9 @@ class Handler(BaseHTTPRequestHandler):
             profile_code = str(data.get('profileCode', '')).strip()[:8]
             profile_title = str(data.get('profileTitle', '')).strip()[:120]
             dimensions = data.get('dimensions', {})
-            valid_answers = isinstance(answers, list) and len(answers) == 10 and all(isinstance(value, int) and 1 <= value <= 4 for value in answers)
+            valid_answers = isinstance(answers, list) and len(answers) == 12 and all(isinstance(value, int) and 1 <= value <= 4 for value in answers)
             valid_dimensions = isinstance(dimensions, dict) and all(key in dimensions for key in ('volatility', 'independence', 'discipline'))
-            if len(name) < 2 or not re.fullmatch(r'09\d{9}', phone) or not 18 <= age <= 100 or not gender or not data.get('consent') or not valid_answers or sum(answers) != score or not 10 <= score <= 40 or not re.fullmatch(r'T(?:10|[1-9])', profile_code) or not valid_dimensions:
+            if len(name) < 2 or not re.fullmatch(r'09\d{9}', phone) or not 18 <= age <= 100 or not gender or not data.get('consent') or not valid_answers or sum(answers) != score or not 12 <= score <= 48 or not re.fullmatch(r'T(?:10|[1-9])', profile_code) or not valid_dimensions:
                 return self.send_json(400, {'error': 'invalid assessment'})
             now = datetime.now(timezone.utc).isoformat()
             with connect() as db:
