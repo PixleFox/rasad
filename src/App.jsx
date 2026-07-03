@@ -25,6 +25,7 @@ import VentureFunds from './pages/VentureFunds'
 import OtherFunds from './pages/OtherFunds'
 import ScrollToTop from './components/ScrollToTop'
 import AdminLeads from './pages/AdminLeads'
+import Recommendation from './pages/Recommendation'
 
 function MainLayout() {
   return (
@@ -72,6 +73,7 @@ export default function App() {
           <Route path="/about" element={<About />} />
           <Route path="/ranking" element={<Ranking />} />
           <Route path="/admin/leads" element={<AdminLeads />} />
+          <Route path="/recommendation" element={<Recommendation />} />
         </Route>
       </Routes>
     </BrowserRouter>
