@@ -152,16 +152,20 @@ async function _fetchTsetmc(path) {
 }
 
 export async function fetchTsetmcQuality(insCode) {
-  const [price, info, limits, daily] = await Promise.all([
+  const [price, fund, info, limits, daily] = await Promise.all([
     _fetchTsetmc(`ClosingPrice/GetClosingPriceInfo/${insCode}`),
+    _fetchTsetmc(`Fund/GetETFByInsCode/${insCode}`).catch(() => ({ etf: null })),
     _fetchTsetmc(`Instrument/GetInstrumentInfo/${insCode}`),
     _fetchTsetmc(`BestLimits/${insCode}`).catch(() => ({ bestLimits: [] })),
     _fetchTsetmc(`ClosingPrice/GetClosingPriceDailyList/${insCode}/30`).catch(() => ({ closingPriceDaily: [] })),
   ])
   const cp  = price.closingPriceInfo
+  const etf = fund.etf
   const inf = info.instrumentInfo
   const pClose     = cp?.pClosing       ?? null
   const pLastTrade = cp?.pDrCotVal      ?? null
+  const pRedTran   = etf?.pRedTran      ?? null
+  const bubblePct  = calculateMarketBubble(pLastTrade, pRedTran)
   const pYest      = cp?.priceYesterday ?? null
   const changePct  = pClose != null && pYest && pYest > 0 ? ((pClose - pYest) / pYest) * 100 : null
 
@@ -194,6 +198,8 @@ export async function fetchTsetmcQuality(insCode) {
   return {
     pClose,
     pLastTrade,
+    pRedTran,
+    bubblePct,
     pYest,
     changePct,
     trades:         cp?.zTotTran       ?? null,
@@ -205,6 +211,13 @@ export async function fetchTsetmcQuality(insCode) {
     avgDailyTrades,
   }
 }
+
+// ETF premium/discount based exclusively on TSETMC's last trade and redemption NAV.
+export const calculateMarketBubble = (lastTrade, redemptionNav) =>
+  Number.isFinite(Number(lastTrade)) && Number(lastTrade) > 0 &&
+  Number.isFinite(Number(redemptionNav)) && Number(redemptionNav) > 0
+    ? ((Number(lastTrade) - Number(redemptionNav)) / Number(redemptionNav)) * 100
+    : null
 
 export async function fetchCodalNews(count = 100) {
   const data = await _fetchTsetmc(`Codal/GetPreparedData/${count}`)
@@ -389,16 +402,6 @@ export const isNewFund = (initiation, endISO) => {
 export const reserveBillionToman = (f) =>
   f.statNav && f.cancelNav ? ((f.statNav - f.cancelNav) * f.units) / 1e10 : null
 
-// Bubble (%): premium of statistical price over redemption price.
-// For commodity ETFs (type=5), Fipiran often sets statNav === cancelNav so the
-// metric is unreliable — return null when the spread is < 0.1%.
-export const bubblePercent = (f) => {
-  if (!(f.cancelNav > 0)) return null
-  const pct = ((f.statNav - f.cancelNav) / f.cancelNav) * 100
-  if (f.type === 5 && Math.abs(pct) < 0.1) return null
-  return pct
-}
-
 // Asset-risk index 0..100 from composition (stocks are the riskiest).
 export const riskLevel = (f) => {
   const c = f.comp || {}
@@ -442,7 +445,7 @@ export function enrichFunds(funds, endISO) {
   const metrics = funds.map((f) => ({
     years:   yearsSince(f.initiationDate, endISO),
     reserve: reserveBillionToman(f),
-    bubble:  bubblePercent(f),
+    bubble:  null,
     risk:    riskLevel(f),
   }))
 

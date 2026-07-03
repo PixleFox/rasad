@@ -113,8 +113,7 @@ function BoardQualityTable({ funds, qData }) {
   function getFundScores(f) {
     const d = qData[f.insCode]
     if (!d) return null
-    const bubblePct = d.pLastTrade != null && f.navRet > 0
-      ? (d.pLastTrade - f.navRet) / f.navRet * 100 : null
+    const bubblePct = d.bubblePct
     const mm     = scoreMM(d.mmVolBT, f.sizeRial)
     const bubble = scoreBubble(bubblePct) ?? 0
     const vol    = scoreVolume(d.avgMonthVol, f.sizeRial, f.navRet)
@@ -902,15 +901,13 @@ function QualityView({ funds, tabId, setTabId, loading: fundsLoading }) {
       label: 'حباب ناو',
       sortVal: (f) => {
         const d = qData[f.insCode]
-        if (!d || d.pLastTrade == null || !f.navRet) return null
-        return (d.pLastTrade - f.navRet) / f.navRet * 100
+        return d?.bubblePct ?? null
       },
       render: (f) => {
         const d = qData[f.insCode]
         if (!d) return <span className="text-text-muted/40 text-xs animate-pulse">...</span>
-        if (d.pLastTrade == null || !f.navRet) return <span className="text-text-muted/40 text-xs">—</span>
-        const pct = (d.pLastTrade - f.navRet) / f.navRet * 100
-        return <BubbleBadge pct={pct} />
+        if (d.bubblePct == null) return <span className="text-text-muted/40 text-xs">—</span>
+        return <div title={`آخرین معامله: ${faNum(d.pLastTrade)} · NAV ابطال: ${faNum(d.pRedTran)}`}><BubbleBadge pct={d.bubblePct} /></div>
       },
     },
     {

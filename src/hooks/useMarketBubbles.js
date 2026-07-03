@@ -23,9 +23,12 @@ export function useMarketBubbles(rows) {
   return useMemo(() => rows.map((row) => {
     if (!row.isETF || !row.insCode) return { ...row, marketBubble: null, marketBubbleLoading: false }
     const market = prices[row.insCode]
-    const marketBubble = market?.pLastTrade != null && row.navRet > 0
-      ? ((market.pLastTrade - row.navRet) / row.navRet) * 100
-      : null
-    return { ...row, marketBubble, marketBubbleLoading: !Object.hasOwn(prices, row.insCode) }
+    return {
+      ...row,
+      marketBubble: market?.bubblePct ?? null,
+      marketPrice: market?.pLastTrade ?? null,
+      marketRedemptionNav: market?.pRedTran ?? null,
+      marketBubbleLoading: !Object.hasOwn(prices, row.insCode),
+    }
   }), [rows, prices])
 }

@@ -4,6 +4,7 @@ import { useRangeFunds } from '../hooks/useRangeFunds'
 import { enrichFunds, FUND_TYPES, faNum, fmtSize, fmtPercent } from '../lib/fipiran'
 import { ScorePill, RiskMeter } from '../components/FundsTable'
 import RangePicker from '../components/RangePicker'
+import { useMarketBubbles } from '../hooks/useMarketBubbles'
 
 // ── Parameter definitions ─────────────────────────────────────────────────────
 // Each row: { key, label, getValue, format, render, higherBetter, onlyTypes, excludeTypes, section }
@@ -49,13 +50,12 @@ const PARAMS = [
     render: f => <RiskMeter value={f.risk} />,
   },
   {
-    key: 'bubble', label: 'حباب (%)', section: 'ریسک',
-    excludeTypes: [4],
-    getValue: f => f.bubble, higherBetter: false,
+    key: 'bubble', label: 'حباب NAV بازار', section: 'ریسک',
+    getValue: f => f.marketBubble, higherBetter: false,
     render: f => {
-      if (f.bubble == null) return <span className="text-text-muted/40">—</span>
-      const color = Math.abs(f.bubble) < 1 ? '#8A94A6' : f.bubble > 0 ? '#FBBF24' : '#00D4FF'
-      return <span className="font-dana tabular-nums" style={{ fontWeight: 700, color }}>{(f.bubble >= 0 ? '+' : '−') + faNum(Math.abs(f.bubble).toFixed(1)) + '٪'}</span>
+      if (f.marketBubble == null) return <span className="text-text-muted/40">—</span>
+      const color = Math.abs(f.marketBubble) < 0.1 ? '#8A94A6' : f.marketBubble > 0 ? '#FF3B6B' : '#00D4FF'
+      return <span title={`آخرین معامله: ${faNum(f.marketPrice)} · NAV ابطال: ${faNum(f.marketRedemptionNav)}`} className="font-dana tabular-nums" style={{ fontWeight: 700, color }}>{(f.marketBubble >= 0 ? '+' : '') + faNum(f.marketBubble.toFixed(2)) + '٪'}</span>
     },
   },
 ]
@@ -249,12 +249,13 @@ export default function Comparison() {
     const enrichedAll = enrichFunds(allPeers, endDate || endISO)
     return enrichedAll.filter(f => selectedFunds.some(s => s.regNo === f.regNo))
   }, [funds, selectedFunds, endDate, endISO])
+  const marketSelected = useMarketBubbles(enrichedSelected)
 
   // Determine winner (highest rasadScore)
   const winnerRegNo = useMemo(() => {
-    if (enrichedSelected.length < 2) return null
-    return enrichedSelected.reduce((best, f) => f.rasadScore > (best?.rasadScore ?? -1) ? f : best, null)?.regNo
-  }, [enrichedSelected])
+    if (marketSelected.length < 2) return null
+    return marketSelected.reduce((best, f) => f.rasadScore > (best?.rasadScore ?? -1) ? f : best, null)?.regNo
+  }, [marketSelected])
 
   // Filter params for current type
   const activeParams = useMemo(() => {
@@ -270,17 +271,17 @@ export default function Comparison() {
   const bestMap = useMemo(() => {
     const map = {}
     for (const param of activeParams) {
-      if (param.higherBetter == null || enrichedSelected.length < 2) continue
-      const values = enrichedSelected.map(f => param.getValue(f))
+      if (param.higherBetter == null || marketSelected.length < 2) continue
+      const values = marketSelected.map(f => param.getValue(f))
       const numericValues = values.map(v => (typeof v === 'number' ? v : null))
       const validValues = numericValues.filter(v => v != null)
       if (validValues.length === 0) continue
       const target = param.higherBetter ? Math.max(...validValues) : Math.min(...validValues)
       const bestIdx = numericValues.findIndex(v => v === target)
-      if (bestIdx !== -1) map[param.key] = enrichedSelected[bestIdx]?.regNo
+      if (bestIdx !== -1) map[param.key] = marketSelected[bestIdx]?.regNo
     }
     return map
-  }, [activeParams, enrichedSelected])
+  }, [activeParams, marketSelected])
 
   const sections = [...new Set(activeParams.map(p => p.section))]
 
@@ -328,7 +329,7 @@ export default function Comparison() {
         </motion.div>
 
         {/* Empty state */}
-        {enrichedSelected.length === 0 && (
+        {marketSelected.length === 0 && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}
             className="text-center py-24">
             <div className="text-5xl mb-4">🔭</div>
@@ -344,10 +345,10 @@ export default function Comparison() {
         )}
 
         {/* Comparison table */}
-        {enrichedSelected.length > 0 && (
+        {marketSelected.length > 0 && (
           <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
             <div className="overflow-x-auto rounded-2xl border border-neon-cyan/10 bg-surface/30 backdrop-blur-sm">
-              <table className="w-full border-collapse" style={{ minWidth: `${280 + enrichedSelected.length * 200}px` }}>
+              <table className="w-full border-collapse" style={{ minWidth: `${280 + marketSelected.length * 200}px` }}>
                 <thead>
                   <tr style={{ background: 'linear-gradient(135deg, rgba(0,212,255,0.06), rgba(124,58,237,0.06))' }}>
                     {/* Parameter label column */}
@@ -356,7 +357,7 @@ export default function Comparison() {
                       پارامتر
                     </th>
                     {/* Fund columns */}
-                    {enrichedSelected.map(f => (
+                    {marketSelected.map(f => (
                       <th key={f.regNo} className="py-3 px-3 text-center" style={{ minWidth: 190 }}>
                         <FundHeader
                           fund={f}
@@ -392,8 +393,8 @@ export default function Comparison() {
                         </td>
 
                         {/* Value cells */}
-                        {enrichedSelected.map(f => {
-                          const isBest = bestMap[param.key] === f.regNo && enrichedSelected.length > 1
+                        {marketSelected.map(f => {
+                          const isBest = bestMap[param.key] === f.regNo && marketSelected.length > 1
                           return (
                             <td
                               key={f.regNo}

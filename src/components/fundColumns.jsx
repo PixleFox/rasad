@@ -110,7 +110,7 @@ export const otherFundsColumns = [
       const positive = v > 0
       const color = Math.abs(v) < 0.1 ? '#8A94A6' : positive ? '#FF3B6B' : '#00D4FF'
       return (
-        <div className="flex min-w-[76px] flex-col items-center gap-0.5">
+        <div className="flex min-w-[90px] flex-col items-center gap-0.5" title={`آخرین معامله: ${faNum(f.marketPrice)} · NAV ابطال: ${faNum(f.marketRedemptionNav)}`}>
           <span className="text-sm font-dana tabular-nums" style={{ fontWeight: 800, color }}>{(v >= 0 ? '+' : '') + faNum(v.toFixed(2)) + '٪'}</span>
           <span className="text-[0.58rem]" style={{ color, fontWeight: 600 }}>{Math.abs(v) < 0.1 ? 'تقریباً بدون حباب' : positive ? 'حباب مثبت' : 'تخفیف نسبت به NAV'}</span>
         </div>
