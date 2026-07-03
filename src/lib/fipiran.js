@@ -95,10 +95,12 @@ export const daysBetween = (isoA, isoB) => {
 function normalize(it) {
   // صندوق‌های ضمان و گارانتی → دسته مختلط (type 7)
   const name = it.name || ''
-  const fundType =
-    (name.includes('ضمان') || name.includes('گارانتی'))
-      ? 7
-      : it.fundType
+  const charity = it.fundType === 17 || name.includes('نیکوکاری')
+  const fundType = charity
+    ? 17
+    : (name.includes('ضمان') || name.includes('گارانتی'))
+        ? 7
+        : it.fundType
 
   return {
     regNo: it.regNo,
@@ -107,7 +109,7 @@ function normalize(it) {
     type: fundType,
     typeLabel: FUND_TYPES[fundType] || 'سایر',
     // صندوق‌های نیکوکاری: گاهی type آن‌ها 4/6/7 ثبت می‌شه، نه 17
-    isCharity: it.fundType === 17 || (it.name || '').includes('نیکوکاری'),
+    isCharity: charity,
     sizeRial: it.fundSize ?? it.netAsset ?? 0,
     manager: it.manager || '',
     insCode: it.insCode || null,

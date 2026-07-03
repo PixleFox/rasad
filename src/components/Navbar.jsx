@@ -171,15 +171,15 @@ function DesktopNavItem({ item }) {
     return () => document.removeEventListener('mousedown', close)
   }, [])
 
-  if (!item.sub) return <Link to={item.to} className="whitespace-nowrap text-[0.65rem] font-dana text-text-muted transition-colors hover:text-neon-cyan xl:text-[0.7rem]" style={{ fontWeight: 700 }}>{item.label}</Link>
+  if (!item.sub) return <Link to={item.to} className="whitespace-nowrap text-[0.56rem] font-dana text-text-muted transition-colors hover:text-neon-cyan xl:text-[0.62rem]" style={{ fontWeight: 600 }}>{item.label}</Link>
   return (
     <div ref={ref} className="relative" onMouseEnter={() => setOpen(true)}>
-      <button type="button" onClick={() => setOpen(!open)} className="flex items-center gap-1 whitespace-nowrap text-[0.65rem] font-dana text-text-muted hover:text-neon-cyan xl:text-[0.7rem]" style={{ fontWeight: 700 }}>
-        {item.label}<ChevronDown size={14} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+      <button type="button" onClick={() => setOpen(!open)} className="flex items-center gap-0.5 whitespace-nowrap text-[0.56rem] font-dana text-text-muted hover:text-neon-cyan xl:text-[0.62rem]" style={{ fontWeight: 600 }}>
+        {item.label}<ChevronDown size={11} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       <div className={`absolute right-0 top-full z-50 pt-3 transition-all ${open ? 'opacity-100' : 'pointer-events-none -translate-y-2 opacity-0'}`} onMouseLeave={() => setOpen(false)}>
         <div className="grid w-72 grid-cols-2 gap-1 rounded-xl border border-neon-cyan/10 bg-surface p-2 shadow-xl">
-          {item.sub.map((sub) => <Link key={sub.label} to={sub.to} onClick={() => setOpen(false)} className="rounded-lg px-3 py-2 text-sm text-text-muted hover:bg-neon-cyan/5 hover:text-neon-cyan" style={{ fontWeight: 700 }}>{sub.label}</Link>)}
+          {item.sub.map((sub) => <Link key={sub.label} to={sub.to} onClick={() => setOpen(false)} className="rounded-lg px-3 py-2 text-xs text-text-muted hover:bg-neon-cyan/5 hover:text-neon-cyan" style={{ fontWeight: 600 }}>{sub.label}</Link>)}
         </div>
       </div>
     </div>
@@ -223,13 +223,13 @@ export default function Navbar() {
   return (
     <>
       <header className={`fixed top-0 right-0 left-0 z-50 transition-all ${scrolled ? 'border-b border-neon-cyan/10 bg-space/90 shadow-lg backdrop-blur-xl' : 'bg-space/55 backdrop-blur-md lg:bg-transparent'}`}>
-        <nav className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4 sm:px-6 lg:h-[4.5rem] lg:px-8">
+        <nav className="mx-auto flex h-16 max-w-[90rem] items-center justify-between gap-2 px-4 sm:px-6 lg:h-[4.5rem] lg:px-5">
           <Link to="/" className="flex shrink-0 items-center gap-2" aria-label="رصد - صفحه اصلی">
-            <img src="/assets/Logo.png" alt="" className="h-9 w-auto object-contain" style={{ filter: 'drop-shadow(0 0 8px rgba(0,212,255,0.4))' }} />
-            <span className="text-xl text-white sm:text-2xl" style={{ fontWeight: 900 }}>رصد</span>
+            <img src="/assets/Logo.png" alt="" className="h-8 w-auto object-contain sm:h-9" style={{ filter: 'drop-shadow(0 0 8px rgba(0,212,255,0.4))' }} />
+            <span className="text-lg text-white sm:text-xl" style={{ fontWeight: 900 }}>رصد</span>
           </Link>
-          <div className="hidden flex-1 items-center justify-center gap-2 lg:flex xl:gap-3">{menuItems.map((item) => <DesktopNavItem key={item.label} item={item} />)}</div>
-          <div className="hidden w-56 shrink-0 xl:w-64 lg:block"><SearchBox funds={funds} /></div>
+          <div className="hidden flex-1 items-center justify-center gap-1.5 lg:flex xl:gap-2.5">{menuItems.map((item) => <DesktopNavItem key={item.label} item={item} />)}</div>
+          <div className="hidden w-48 shrink-0 xl:w-56 lg:block"><SearchBox funds={funds} /></div>
           <div className="flex items-center gap-1 lg:hidden">
             <button type="button" onClick={() => setSearchOpen(true)} className="grid h-11 w-11 place-items-center rounded-xl border border-neon-cyan/10 bg-surface/70 text-neon-cyan" aria-label="جستجو"><Search size={21} /></button>
             <button type="button" onClick={() => setMobileOpen(!mobileOpen)} className="grid h-11 w-11 place-items-center rounded-xl border border-neon-cyan/10 bg-surface/70 text-text-primary" aria-label={mobileOpen ? 'بستن منو' : 'باز کردن منو'}>{mobileOpen ? <X size={22} /> : <Menu size={22} />}</button>
