@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom'
 import { exportRowsToCsv } from '../lib/tableExport'
 import PhoneCaptureModal from './PhoneCaptureModal'
 import { getSavedExportPhone, recordExportLead, saveExportPhone } from '../lib/exportLeads'
+import { useExchangeRate } from '../hooks/useExchangeRate'
 
 const MEDAL = {
   0: { icon: '🏆', color: '#FFD700', shadow: '#FFD70060' },
@@ -38,6 +39,7 @@ export default function FundsTable({
   const [query, setQuery] = useState(() => searchParams.get('q') || '')
   const [phoneModalOpen, setPhoneModalOpen] = useState(false)
   const [exportBusy, setExportBusy] = useState(false)
+  const exchangeRate = useExchangeRate()
 
   const getMedal = (row, i) => {
     if (rankField != null) {
@@ -108,7 +110,18 @@ export default function FundsTable({
       </div>
     ),
   }
-  const allColumns = [rankCol, ...columns]
+  const hasFundAum = rows.some((row) => Number(row.sizeRial) > 0)
+  const dollarColumn = {
+    key: '__dollarValue',
+    label: 'ارزش صندوق (میلیون دلار)',
+    sortVal: (row) => exchangeRate?.priceToman > 0 ? row.sizeRial / 10 / exchangeRate.priceToman / 1e6 : null,
+    exportValue: (row) => exchangeRate?.priceToman > 0 ? row.sizeRial / 10 / exchangeRate.priceToman / 1e6 : null,
+    render: (row) => {
+      const value = exchangeRate?.priceToman > 0 ? row.sizeRial / 10 / exchangeRate.priceToman / 1e6 : null
+      return <span className="text-text-primary text-sm font-dana tabular-nums" style={{ fontWeight: 600 }}>{Number.isFinite(value) ? value.toLocaleString('fa-IR', { maximumFractionDigits: 1 }) : '—'}</span>
+    },
+  }
+  const allColumns = [rankCol, ...columns, ...(hasFundAum ? [dollarColumn] : [])]
   const exportColumns = allColumns.map((col) => ({
     ...col,
     exportValue: col.exportValue || ((row, i) => {

@@ -50,6 +50,16 @@ def connect():
       );
       CREATE INDEX IF NOT EXISTS risk_assessments_phone_idx ON risk_assessments(phone);
       CREATE INDEX IF NOT EXISTS risk_assessments_created_idx ON risk_assessments(created_at DESC);
+      CREATE TABLE IF NOT EXISTS exchange_rates (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        symbol TEXT NOT NULL,
+        price_toman REAL NOT NULL,
+        source_date TEXT,
+        source_time TEXT,
+        source_timestamp INTEGER,
+        fetched_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS exchange_rates_symbol_fetched_idx ON exchange_rates(symbol, fetched_at DESC);
     ''')
     return db
 
@@ -119,6 +129,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(500, {'error': 'server error'})
 
     def do_GET(self):
+        if self.path == '/api/exchange-rate':
+            return self.get_exchange_rate()
         if self.path == '/api/risk-assessments/admin':
             return self.get_risk_assessments()
         if self.path != '/api/export-leads/admin':
@@ -136,6 +148,22 @@ class Handler(BaseHTTPRequestHandler):
               GROUP BY u.id ORDER BY u.created_at DESC
             ''').fetchall()
         self.send_json(200, {'rows': [dict(row) for row in rows]})
+
+    def get_exchange_rate(self):
+        with connect() as db:
+            row = db.execute('''
+              SELECT symbol, price_toman, source_date, source_time, fetched_at
+              FROM exchange_rates WHERE symbol='USD' ORDER BY fetched_at DESC LIMIT 1
+            ''').fetchone()
+        if not row:
+            return self.send_json(503, {'error': 'exchange rate unavailable'})
+        self.send_json(200, {
+            'symbol': row['symbol'],
+            'priceToman': row['price_toman'],
+            'sourceDate': row['source_date'],
+            'sourceTime': row['source_time'],
+            'fetchedAt': row['fetched_at'],
+        })
 
     def get_risk_assessments(self):
         if not self.authorized():
