@@ -26,6 +26,7 @@ import OtherFunds from './pages/OtherFunds'
 import ScrollToTop from './components/ScrollToTop'
 import AdminLeads from './pages/AdminLeads'
 import Recommendation from './pages/Recommendation'
+import Seo from './components/Seo'
 
 function MainLayout() {
   return (
@@ -47,6 +48,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <ScrollToTop />
+      <Seo />
       <Routes>
         {/* Standalone pages — no navbar/footer */}
         <Route path="/triggers" element={<Triggers />} />
