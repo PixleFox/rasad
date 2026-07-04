@@ -4,7 +4,7 @@ import { motion } from 'framer-motion'
 import FundsTable from '../components/FundsTable'
 import {
   fetchRangeReturns, computeManagers, faNum, fmtPercent,
-  todayISO, monthsBeforeISO, FUND_TYPES,
+  todayISO, monthsBeforeISO, FUND_TYPES, toJalali,
 } from '../lib/fipiran'
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -106,6 +106,7 @@ export default function ManagerDashboard() {
         <div className="flex flex-col min-w-[180px]">
           <span className="text-text-primary text-sm font-dana" style={{ fontWeight: 800 }}>{f.name}</span>
           <span className="text-text-muted text-xs font-dana" style={{ fontWeight: 600 }}>{FUND_TYPES[f.type] ?? 'سایر'}</span>
+          {f.stale && f.staleDate && <span className="text-[0.58rem] text-amber-300">داده {toJalali(f.staleDate)}</span>}
         </div>
       ),
     },
@@ -149,6 +150,7 @@ export default function ManagerDashboard() {
         <div className="flex flex-col min-w-[180px]">
           <span className="text-text-primary text-sm font-dana" style={{ fontWeight: 800 }}>{f.name}</span>
           <span className="text-text-muted text-xs font-dana" style={{ fontWeight: 600 }}>{FUND_TYPES[f.type] ?? 'سایر'}</span>
+          {f.stale && f.staleDate && <span className="text-[0.58rem] text-amber-300">داده {toJalali(f.staleDate)}</span>}
         </div>
       ),
     },
