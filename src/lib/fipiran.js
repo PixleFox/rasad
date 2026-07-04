@@ -560,6 +560,8 @@ const MGMT_PREFIXES = [
   ['هلدینگ ', 'هلدینگ'],
   ['گروه مالی ', 'گروه مالی'],
   ['گروه ', 'گروه'],
+  ['تأمین سرمایه ', 'تامین سرمایه'],
+  ['تامین سرمایه ', 'تامین سرمایه'],
 ]
 
 // Known core-name aliases (spacing / typo variations in Fipiran source).
@@ -571,19 +573,32 @@ const CORE_ALIASES = {
   'آگاه سهامی خاص': 'آگاه',
 }
 
+const LEGAL_PREFIX_RE = /^(?:شرکت|مؤسسه|موسسه|نهاد مالی)\s+/
+const LEGAL_SUFFIX_RE = /\s*(?:\(|\[)?(?:سهامی\s+خاص|سهامی\s+عام|با\s+مسئولیت\s+محدود|مسئولیت\s+محدود)(?:\)|\])?\s*$/
+
 function normalizeStr(s) {
-  return (s || '').trim().replace(/ي/g, 'ی').replace(/ك/g, 'ک').replace(/\s+/g, ' ')
+  return (s || '')
+    .trim()
+    .replace(/[يى]/g, 'ی')
+    .replace(/ك/g, 'ک')
+    .replace(/[\u200c\u200d\u200e\u200f]/g, ' ')
+    .replace(/[،,؛;:_–—-]+/g, ' ')
+    .replace(/\s+/g, ' ')
 }
 
 function splitManagerName(rawName) {
-  const n = normalizeStr(rawName)
+  let n = normalizeStr(rawName)
+  while (LEGAL_PREFIX_RE.test(n)) n = n.replace(LEGAL_PREFIX_RE, '').trim()
   for (const [prefix, entityType] of MGMT_PREFIXES) {
     if (n.startsWith(prefix)) {
-      const rawCore = n.slice(prefix.length).trim()
-      return { core: CORE_ALIASES[rawCore] ?? rawCore, entityType }
+      const rawCore = n.slice(prefix.length).replace(LEGAL_SUFFIX_RE, '').trim()
+      const core = CORE_ALIASES[rawCore] ?? rawCore
+      return { core, canonicalKey: normalizeStr(core).replace(/\s+/g, ''), entityType }
     }
   }
-  return { core: CORE_ALIASES[n] ?? n, entityType: '' }
+  const rawCore = n.replace(LEGAL_SUFFIX_RE, '').trim()
+  const core = CORE_ALIASES[rawCore] ?? rawCore
+  return { core, canonicalKey: normalizeStr(core).replace(/\s+/g, ''), entityType: '' }
 }
 
 // Aggregates all funds by manager group. Merges entities with the same brand
@@ -593,9 +608,10 @@ export function computeManagers(funds, endISO) {
 
   for (const f of funds) {
     if (f.isCharity) continue
-    const { core, entityType } = splitManagerName(f.manager)
-    if (!groups.has(core)) groups.set(core, { entityTypes: new Set(), funds: [] })
-    const g = groups.get(core)
+    const { core, canonicalKey, entityType } = splitManagerName(f.manager)
+    if (!canonicalKey) continue
+    if (!groups.has(canonicalKey)) groups.set(canonicalKey, { core, entityTypes: new Set(), funds: [] })
+    const g = groups.get(canonicalKey)
     g.entityTypes.add(entityType)
     g.funds.push(f)
   }
@@ -612,7 +628,8 @@ export function computeManagers(funds, endISO) {
   }
 
   return Array.from(groups.entries())
-    .map(([core, g]) => {
+    .map(([canonicalKey, g]) => {
+      const core = g.core
       const types = [...g.entityTypes].filter(Boolean)
       const multiType = types.length > 1
 
@@ -639,7 +656,7 @@ export function computeManagers(funds, endISO) {
       const years = dates.length ? yearsSince(dates[0], endISO) : null
 
       return {
-        id: core,
+        id: canonicalKey,
         name: displayName,
         core,
         aumBT,

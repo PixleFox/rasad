@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import FundsPageLayout from '../components/FundsPageLayout'
 import FundsTable from '../components/FundsTable'
-import { useRangeFunds } from '../hooks/useRangeFunds'
+import { useRankingData } from '../hooks/useRankingData'
 import { computeManagers, faNum } from '../lib/fipiran'
 
 function FlowCell({ value }) {
@@ -28,14 +28,27 @@ function FlowPctCell({ value }) {
   )
 }
 
+function RankChangeCell({ value }) {
+  if (value == null) return <span className="text-text-muted/40 text-xs">—</span>
+  if (value === 0) return <span className="text-text-muted/50 text-sm" style={{ fontWeight: 700 }}>═</span>
+  const up = value > 0
+  return <span className="text-sm font-dana tabular-nums" style={{ fontWeight: 900, color: up ? '#00FF9D' : '#FF3B6B' }}>{up ? '▲' : '▼'} {faNum(Math.abs(value))}</span>
+}
+
 export default function Managers() {
   const navigate = useNavigate()
-  const { funds, startDate, endDate, loading, error, startISO, endISO, setStartISO, setEndISO } = useRangeFunds()
+  const { currentFunds, priorFunds, startDate, endDate, loading, error, startISO, endISO, setStartISO, setEndISO } = useRankingData()
 
-  const rows = useMemo(
-    () => computeManagers(funds, endDate || endISO),
-    [funds, endDate, endISO]
-  )
+  const rows = useMemo(() => {
+    const current = computeManagers(currentFunds, endDate || endISO)
+    const prior = computeManagers(priorFunds, startDate || startISO)
+    const priorRanks = new Map(prior.map((manager, index) => [manager.id, index + 1]))
+    return current.map((manager, index) => {
+      const rank = index + 1
+      const priorRank = priorRanks.get(manager.id) ?? null
+      return { ...manager, rank, priorRank, rankChange: priorRank == null ? null : priorRank - rank }
+    })
+  }, [currentFunds, priorFunds, startDate, endDate, startISO, endISO])
 
   const columns = [
     {
@@ -63,6 +76,13 @@ export default function Managers() {
           {Number.isFinite(row.aumTBT) ? faNum(row.aumTBT.toFixed(1)) : '—'}
         </span>
       ),
+    },
+    {
+      key: 'rankChange',
+      label: 'تغییر رتبه',
+      sortVal: (row) => row.rankChange,
+      render: (row) => <RankChangeCell value={row.rankChange} />,
+      exportValue: (row) => row.rankChange,
     },
     {
       key: 'count',
@@ -143,7 +163,7 @@ export default function Managers() {
           error={error}
           onRetry={() => setStartISO((d) => d)}
           emptyText="داده‌ای یافت نشد."
-          goodSortKeys={['aum', 'count', 'years', 'flow', 'flowPct']}
+          goodSortKeys={['aum', 'rankChange', 'count', 'years', 'flow', 'flowPct']}
           rowKey={(row) => row.id}
         />
       </motion.div>
