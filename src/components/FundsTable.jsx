@@ -5,7 +5,6 @@ import { exportRowsToCsv } from '../lib/tableExport'
 import PhoneCaptureModal from './PhoneCaptureModal'
 import { getSavedExportPhone, recordExportLead, saveExportPhone } from '../lib/exportLeads'
 import { useExchangeRate } from '../hooks/useExchangeRate'
-import { toJalali } from '../lib/fipiran'
 
 const MEDAL = {
   0: { icon: '🏆', color: '#FFD700', shadow: '#FFD70060' },
@@ -107,7 +106,6 @@ export default function FundsTable({
     render: (row, i) => (
       <div className="flex flex-col items-center gap-1">
         {row.isNew && <span className="whitespace-nowrap rounded bg-neon-green/15 px-1 py-0.5 text-[0.55rem] text-neon-green" title="کمتر از ۳۰ روز از تأسیس">تازه‌تأسیس</span>}
-        {row.stale && row.staleDate && <span className="max-w-20 text-center text-[0.52rem] leading-4 text-amber-300" title="فیپیران در تاریخ انتخابی این صندوق را گزارش نکرده است">داده {toJalali(row.staleDate)}</span>}
         <RankCell rank={getRankNum(row, i)} medal={getMedal(row, i)} />
       </div>
     ),
