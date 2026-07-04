@@ -273,6 +273,7 @@ export default function TopFunds() {
                   <span className="text-text-muted text-xs font-dana truncate" style={{ fontWeight: 600 }}>
                     {fund.manager}
                   </span>
+                  {fund.stale && fund.staleDate && <span className="text-[0.58rem] text-amber-300">داده {toJalali(fund.staleDate)}</span>}
                 </div>
 
                 {/* Symbol */}

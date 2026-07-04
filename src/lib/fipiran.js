@@ -228,8 +228,26 @@ export async function fetchCodalNews(count = 100) {
 // Caches resolved snapshots by requested start date, and dedupes in-flight
 // requests so React StrictMode's double-invoke (and rapid re-renders) don't
 // fire duplicate walk-back chains that Fipiran throttles.
-const _cache = new Map() // startDate -> { date, funds }
-const _inflight = new Map() // startDate -> Promise
+const _cache = new Map() // completed snapshots by requested date
+const _inflight = new Map()
+const _rawCache = new Map() // exact-date responses, including empty dates
+const _rawInflight = new Map()
+
+function fetchRawFundCompare(date) {
+  if (_rawCache.has(date)) return Promise.resolve(_rawCache.get(date))
+  if (_rawInflight.has(date)) return _rawInflight.get(date)
+  const promise = fetch(`${BASE}/fundcompare?date=${date}`)
+    .then((res) => res.ok ? res.json() : null)
+    .then((json) => {
+      const snapshot = json?.items?.length ? { date, funds: json.items.map(normalize) } : null
+      _rawCache.set(date, snapshot)
+      return snapshot
+    })
+    .catch(() => { _rawCache.set(date, null); return null })
+    .finally(() => _rawInflight.delete(date))
+  _rawInflight.set(date, promise)
+  return promise
+}
 
 // Fetches the all-funds comparison snapshot for a date, walking back day-by-day
 // (holidays/weekends have no data) until a populated snapshot is found.
@@ -238,25 +256,53 @@ export function fetchFundCompare(startDate, maxBack = 12) {
   if (_inflight.has(startDate)) return _inflight.get(startDate)
 
   const promise = (async () => {
-    const d = new Date(startDate + 'T00:00:00')
+    let base = null
     for (let i = 0; i < maxBack; i++) {
-      const ds = toISO(d)
-      try {
-        const res = await fetch(`${BASE}/fundcompare?date=${ds}`)
-        if (res.ok) {
-          const json = await res.json()
-          if (json?.items?.length) {
-            const out = { date: ds, funds: json.items.map(normalize) }
-            _cache.set(startDate, out)
-            return out
-          }
-        }
-      } catch {
-        // network error — try previous day
-      }
-      d.setDate(d.getDate() - 1)
+      base = await fetchRawFundCompare(shiftISO(startDate, -i))
+      if (base) break
     }
-    throw new Error('داده‌ای برای این بازه پیدا نشد')
+    if (!base) throw new Error('داده‌ای برای این بازه پیدا نشد')
+
+    // Fipiran occasionally omits individual funds from an otherwise valid day.
+    // Build a mandatory, date-aware union from the closest preceding snapshots.
+    // Forty-five populated days with no new fund is the completion threshold; the
+    // hard ceiling protects the API while covering sparse-reporting fund types.
+    const merged = new Map(base.funds.map((fund) => [fund.regNo, {
+      ...fund,
+      stale: base.date !== startDate,
+      staleDate: base.date !== startDate ? base.date : null,
+      dataDate: base.date,
+    }]))
+    let populatedDays = 0
+    let quietDays = 0
+    const maxHistoryDays = 370
+    const batchSize = 7
+
+    for (let offset = 1; offset <= maxHistoryDays && quietDays < 45; offset += batchSize) {
+      const dates = Array.from({ length: Math.min(batchSize, maxHistoryDays - offset + 1) }, (_, index) => shiftISO(base.date, -(offset + index)))
+      const snapshots = await Promise.all(dates.map(fetchRawFundCompare))
+      for (const snapshot of snapshots) {
+        if (!snapshot) continue
+        populatedDays += 1
+        let additions = 0
+        for (const fund of snapshot.funds) {
+          if (merged.has(fund.regNo)) continue
+          merged.set(fund.regNo, { ...fund, stale: true, staleDate: snapshot.date, dataDate: snapshot.date })
+          additions += 1
+        }
+        quietDays = additions > 0 ? 0 : quietDays + 1
+        if (populatedDays >= 45 && quietDays >= 45) break
+      }
+    }
+
+    const funds = [...merged.values()]
+    const out = {
+      date: base.date,
+      funds,
+      staleFundsCount: funds.filter((fund) => fund.stale).length,
+    }
+    _cache.set(startDate, out)
+    return out
   })()
 
   _inflight.set(startDate, promise)
@@ -268,8 +314,7 @@ export function fetchFundCompare(startDate, maxBack = 12) {
 // Computes each fund's return over a custom [start, end] window by diffing its
 // NAV between the two daily snapshots. Returns the END snapshot's funds (for
 // name/symbol/size/type) enriched with `rangeReturn` (percent).
-// Also merges funds missing from the end snapshot with the previous trading day
-// to avoid gaps when Fipiran doesn't report all funds on a single day.
+// Both snapshots are already completed by fetchFundCompare's mandatory union.
 export async function fetchRangeReturns(startISO, endISO) {
   // Fetch both endpoints in parallel
   const [endSnap, startSnap] = await Promise.all([
@@ -278,45 +323,34 @@ export async function fetchRangeReturns(startISO, endISO) {
   ])
 
   const startById = new Map(startSnap.funds.map((f) => [f.regNo, f]))
-  const endById   = new Map(endSnap.funds.map((f) => [f.regNo, f]))
-
-  // Walk back up to 7 days to find funds missing from endSnap.
-  // Each missing fund keeps the most recent date it was seen, marked stale.
-  const mergedEnd = [...endSnap.funds]
-  let staleFundsCount = 0
-  let staleDate = null
-  const foundSoFar = new Set(endSnap.funds.map((f) => f.regNo))
-
-  for (let daysBack = 1; daysBack <= 7; daysBack++) {
-    // Stop early if we have nothing left to search for
-    const missingInStart = [...startById.keys()].filter((id) => !foundSoFar.has(id))
-    if (missingInStart.length === 0) break
-
-    const lookISO = shiftISO(endSnap.date, -daysBack)
-    if (lookISO <= startSnap.date) break // don't cross into the start snapshot
-
-    let snap = null
-    try { snap = await fetchFundCompare(lookISO) } catch { continue }
-    if (!snap || snap.date === endSnap.date) continue
-
-    for (const pf of snap.funds) {
-      if (!foundSoFar.has(pf.regNo)) {
-        mergedEnd.push({ ...pf, stale: true, staleDate: snap.date })
-        foundSoFar.add(pf.regNo)
-        staleFundsCount++
-        staleDate = snap.date
-      }
-    }
+  const completedEnd = [...endSnap.funds]
+  const endIds = new Set(completedEnd.map((fund) => fund.regNo))
+  for (const startFund of startSnap.funds) {
+    if (endIds.has(startFund.regNo)) continue
+    completedEnd.push({ ...startFund, stale: true, staleDate: startFund.dataDate, dataDate: startFund.dataDate })
+    endIds.add(startFund.regNo)
   }
 
-  const funds = mergedEnd.map((f) => {
+  const funds = completedEnd.map((f) => {
     const s = startById.get(f.regNo)
     const rangeReturn =
       s && s.navRet > 0 && f.navRet > 0 ? (f.navRet / s.navRet - 1) * 100 : null
-    return { ...f, rangeReturn, unitsStart: s ? s.units : null }
+    return {
+      ...f,
+      rangeReturn,
+      unitsStart: s ? s.units : null,
+      startDataDate: s?.dataDate ?? null,
+      startDataStale: Boolean(s?.stale),
+    }
   })
 
-  return { startDate: startSnap.date, endDate: endSnap.date, staleFundsCount, staleDate, funds }
+  return {
+    startDate: startSnap.date,
+    endDate: endSnap.date,
+    staleFundsCount: funds.filter((fund) => fund.stale).length,
+    staleDate: null,
+    funds,
+  }
 }
 
 // Top N funds of a category by range return. Drops broken outliers and charity funds.
