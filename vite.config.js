@@ -11,6 +11,11 @@ export default defineConfig({
         target: 'http://127.0.0.1:8787',
         changeOrigin: true,
       },
+      '/tsetmc': {
+        target: 'https://cdn.tsetmc.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/tsetmc/, '/api'),
+      },
       // Dev proxy to Fipiran. secure:false bypasses their broken SSL cert
       // (equivalent to rejectUnauthorized:false), and we spoof a browser UA
       // because Fipiran blocks non-browser requests.

@@ -1,321 +1,232 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
-import { fetchFundCompare, todayISO, shiftISO } from '../lib/fipiran'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { AlertTriangle, RefreshCw, Radio, WifiOff } from 'lucide-react'
 
-const BASE = '/tsetmc'
-const _cache = new Map()
-async function tse(path, noCache = false, timeoutMs = 8000) {
-  if (!noCache && _cache.has(path)) return _cache.get(path)
-  const ctrl = new AbortController()
-  const timer = setTimeout(() => ctrl.abort(), timeoutMs)
-  try {
-    const r = await fetch(`${BASE}/${path}`, { signal: ctrl.signal })
-    if (!r.ok) throw new Error(r.status)
-    const d = await r.json()
-    if (!noCache) _cache.set(path, d)
-    return d
-  } finally {
-    clearTimeout(timer)
-  }
-}
+const TSETMC = '/tsetmc'
+const OPEN_REFRESH = 20
+const CLOSED_REFRESH = 180
+const MAX_FUNDS = 100
 
-// ── تنظیمات هر نوع صندوق ──────────────────────────────────────────────────────
-// threshold = avg20d * multPos  (وقتی avg > 0)
-// threshold = avg20d * (-multNeg) (وقتی avg < 0)
 const TYPES = [
-  { id: 4,  label: 'درآمد ثابت', multPos: 2.0, multNeg: 1.1 },
-  { id: 6,  label: 'سهامی',      multPos: 2.0, multNeg: 1.1 },
-  { id: 21, label: 'بخشی',       multPos: 2.5, multNeg: 1.1 },
-  { id: 7,  label: 'مختلط',      multPos: 2.0, multNeg: 1.1 },
-  { id: 5,  label: 'کالایی/طلا', multPos: 2.0, multNeg: 1.1 },
+  { id: 4, label: 'درآمد ثابت', multPos: 2, multNeg: 1.1 },
+  { id: 6, label: 'سهامی', multPos: 2, multNeg: 1.1 },
+  { id: 21, label: 'بخشی', multPos: 2.5, multNeg: 1.1 },
+  { id: 7, label: 'مختلط', multPos: 2, multNeg: 1.1 },
+  { id: 5, label: 'کالایی/طلا', multPos: 2, multNeg: 1.1 },
 ]
 
-const REFRESH = 180
+const fa = (number, decimals = 1) => Number.isFinite(Number(number))
+  ? Number(number).toLocaleString('fa-IR', { maximumFractionDigits: decimals, minimumFractionDigits: decimals })
+  : '—'
 
-function isOpen() {
-  const d = new Date()
-  const t = d.getHours() * 60 + d.getMinutes()
-  return d.getDay() <= 4 && t >= 510 && t <= 1020
+const fmtTime = (date) => date?.toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) || '—'
+
+function marketIsOpen(date = new Date()) {
+  const day = date.getDay()
+  const minute = date.getHours() * 60 + date.getMinutes()
+  const tradingDay = day === 6 || (day >= 0 && day <= 3) // Saturday through Wednesday
+  return tradingDay && minute >= 525 && minute <= 755
 }
 
-const fa = (n, dec = 1) =>
-  Number.isFinite(Number(n))
-    ? Number(n).toLocaleString('fa-IR', { maximumFractionDigits: dec, minimumFractionDigits: dec })
-    : '—'
-
-const fmtT = (d) => d.toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-
-const MAX_FUNDS = 100  // عملاً همه‌ی ETFهای هر نوع (برای تطابق با تب کیفیت مارکتینگ)
-
-// خالص خرید حقیقی زنده‌ی امروز (میلیارد تومان)
-// endpoint زنده GetClientType/{ins}/1/0 فقط حجم می‌دهد، پس:
-//   ارزش = (حجم خرید حقیقی − حجم فروش حقیقی) × قیمت پایانی
-async function liveNetFlow(insCode) {
-  try {
-    const [ctRes, pRes] = await Promise.all([
-      tse(`ClientType/GetClientType/${insCode}/1/0`, true, 6000),
-      tse(`ClosingPrice/GetClosingPriceInfo/${insCode}`, true, 6000),
-    ])
-    const c = ctRes.clientType
-    const p = pRes.closingPriceInfo
-    if (!c || !p) return 0
-    const netVol = (c.buy_I_Volume ?? 0) - (c.sell_I_Volume ?? 0)
-    const price  = p.pClosing ?? p.pDrCotVal ?? 0
-    return (netVol * price) / 1e10
-  } catch { return 0 }
-}
-
-// ── کامپوننت اصلی ─────────────────────────────────────────────────────────────
-export default function Triggers() {
-  const [phase, setPhase]   = useState('init')   // init|done|error
-  const [rows, setRows]     = useState([])        // [{id,label,today,avg,threshold,pct}]
-  const [ts, setTs]         = useState(null)
-  const [cd, setCd]         = useState(REFRESH)
-  const [now, setNow]       = useState(new Date())
-  const funds               = useRef({})          // {typeId: [fund]}
-  const avg20               = useRef({})          // {typeId: number}
-
-  useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 1000)
-    return () => clearInterval(t)
-  }, [])
-
-  const buildRows = (todayFlows) =>
-    TYPES.map((cfg) => {
-      const avg   = avg20.current[cfg.id] ?? 0
-      const today = todayFlows[cfg.id] ?? 0
-      const threshold = avg >= 0 ? avg * cfg.multPos : avg * (-cfg.multNeg)
-      const pct = threshold !== 0 ? today / threshold : 0
-      return { id: cfg.id, label: cfg.label, today, avg, threshold, pct }
-    })
-
-  const fetchLive = useCallback(async () => {
-    const flows = {}
-    await Promise.all(
-      TYPES.map(async (cfg) => {
-        const list = (funds.current[cfg.id] ?? []).slice(0, MAX_FUNDS)
-        if (!list.length) { flows[cfg.id] = 0; return }
-        const vals = await Promise.all(list.map((f) => liveNetFlow(f.insCode)))
-        flows[cfg.id] = vals.reduce((s, v) => s + v, 0)
-      })
-    )
-    setRows(buildRows(flows))
-    setTs(new Date())
-    setCd(REFRESH)
-  }, [])
-
-  const init = useCallback(async () => {
+async function tse(path, { timeout = 9000, attempts = 2 } = {}) {
+  let lastError
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeout)
     try {
-      setPhase('init')
-      const today  = todayISO()
-      const past   = shiftISO(today, -30) // ~۲۰ روز معاملاتی
+      const response = await fetch(`${TSETMC}/${path}`, { signal: controller.signal, cache: 'no-store' })
+      if (!response.ok) throw new Error(`TSETMC ${response.status}`)
+      return await response.json()
+    } catch (error) {
+      lastError = error
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+  throw lastError
+}
 
-      // timeout روی fipiran (اگه جواب نداد بعد از ۱۵ ثانیه error بده)
-      const withTimeout = (p, ms) => Promise.race([p, new Promise((_, r) => setTimeout(() => r(new Error('timeout')), ms))])
+async function mapLimited(items, limit, mapper) {
+  const results = new Array(items.length)
+  let cursor = 0
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (cursor < items.length) {
+      const index = cursor
+      cursor += 1
+      try { results[index] = await mapper(items[index]) } catch { results[index] = null }
+    }
+  }))
+  return results
+}
 
-      const [snap, snap20] = await Promise.all([
-        withTimeout(fetchFundCompare(today), 15000),
-        withTimeout(fetchFundCompare(past), 15000),
-      ])
+export default function Triggers() {
+  const [phase, setPhase] = useState('loading')
+  const [rows, setRows] = useState([])
+  const [updatedAt, setUpdatedAt] = useState(null)
+  const [now, setNow] = useState(new Date())
+  const [countdown, setCountdown] = useState(OPEN_REFRESH)
+  const [refreshing, setRefreshing] = useState(false)
+  const [liveError, setLiveError] = useState('')
+  const fundsByType = useRef({})
+  const averageByType = useRef({})
+  const priceCache = useRef(new Map())
+  const refreshLock = useRef(false)
+  const mounted = useRef(true)
+  const hasRows = useRef(false)
 
-      // صندوق‌های ETF هر نوع (همان مجموعه‌ی تب کیفیت مارکتینگ)
-      for (const cfg of TYPES) {
-        funds.current[cfg.id] = snap.funds
-          .filter((f) => f.type === cfg.id && f.isETF && !f.isCharity && f.insCode)
-          .sort((a, b) => b.sizeRial - a.sizeRial)
-      }
+  const buildRows = useCallback((flows, coverage) => TYPES.map((type) => {
+    const average = averageByType.current[type.id] ?? 0
+    const today = flows[type.id] ?? 0
+    const threshold = average >= 0 ? average * type.multPos : average * -type.multNeg
+    return {
+      id: type.id,
+      label: type.label,
+      today,
+      average,
+      threshold,
+      ratio: threshold ? today / threshold : 0,
+      coverage: coverage[type.id] ?? 0,
+    }
+  }), [])
 
-      // میانگین روزانه‌ی ورود پول ۲۰ روز از فیپیران (همان مجموعه‌ی ETF):
-      //   (واحدها_امروز − واحدها_۲۰روزقبل) × NAV ÷ ۲۰
-      const byReg = new Map(snap20.funds.map((f) => [f.regNo, f]))
-      for (const cfg of TYPES) {
+  const fetchLive = useCallback(async ({ initial = false } = {}) => {
+    if (refreshLock.current) return
+    refreshLock.current = true
+    setRefreshing(true)
+    setLiveError('')
+    try {
+      const clientPayload = await tse('ClientType/GetClientTypeAll', { timeout: 12000, attempts: 3 })
+      const clientMap = new Map((clientPayload.clientTypeAllDto || []).map((item) => [String(item.insCode), item]))
+      const allFunds = [...new Map(TYPES.flatMap((type) => fundsByType.current[type.id] || []).map((fund) => [String(fund.insCode), fund])).values()]
+      const prices = await mapLimited(allFunds, 12, async (fund) => {
+        const payload = await tse(`ClosingPrice/GetClosingPriceInfo/${fund.insCode}`)
+        const info = payload.closingPriceInfo
+        const price = info?.pClosing ?? info?.pDrCotVal
+        if (!Number.isFinite(Number(price)) || Number(price) <= 0) return null
+        priceCache.current.set(String(fund.insCode), Number(price))
+        return Number(price)
+      })
+      const priceMap = new Map(allFunds.map((fund, index) => [String(fund.insCode), prices[index] ?? priceCache.current.get(String(fund.insCode))]))
+      const flows = {}
+      const coverage = {}
+
+      for (const type of TYPES) {
+        const list = fundsByType.current[type.id] || []
         let total = 0
-        for (const f of funds.current[cfg.id]) {
-          const old = byReg.get(f.regNo)
-          if (old && f.navRet > 0) total += (f.units - old.units) * f.navRet / 1e10
+        let valid = 0
+        for (const fund of list) {
+          const key = String(fund.insCode)
+          const client = clientMap.get(key)
+          const price = priceMap.get(key)
+          if (!client || !price) continue
+          total += ((client.buy_I_Volume ?? 0) - (client.sell_I_Volume ?? 0)) * price / 1e10
+          valid += 1
         }
-        avg20.current[cfg.id] = total / 20
+        flows[type.id] = total
+        coverage[type.id] = list.length ? valid / list.length : 0
       }
 
-      await fetchLive()
-      setPhase('done')
-    } catch (e) {
-      console.error(e)
-      setPhase('error')
+      if (!mounted.current) return
+      setRows(buildRows(flows, coverage))
+      hasRows.current = true
+      setUpdatedAt(new Date())
+      setPhase('ready')
+      setCountdown(marketIsOpen() ? OPEN_REFRESH : CLOSED_REFRESH)
+      if (Object.values(coverage).some((value) => value < 0.75)) setLiveError('بخشی از نمادها موقتاً پاسخ ندادند؛ اعداد با آخرین قیمت سالم تکمیل شده‌اند.')
+    } catch {
+      if (!mounted.current) return
+      if (initial || !hasRows.current) setPhase('error')
+      else setLiveError('به‌روزرسانی لحظه‌ای ناموفق بود؛ آخرین داده سالم حفظ شد.')
+    } finally {
+      refreshLock.current = false
+      if (mounted.current) setRefreshing(false)
+    }
+  }, [buildRows])
+
+  const initialize = useCallback(async () => {
+    setPhase('loading')
+    setLiveError('')
+    try {
+      const response = await fetch('/api/trigger-baseline', { cache: 'no-store' })
+      if (!response.ok) throw new Error('baseline unavailable')
+      const baseline = await response.json()
+      for (const type of TYPES) {
+        const list = (baseline.fundsByType?.[type.id] || []).slice(0, MAX_FUNDS)
+        fundsByType.current[type.id] = list
+        averageByType.current[type.id] = Number(baseline.averageByType?.[type.id]) || 0
+      }
+      await fetchLive({ initial: true })
+    } catch {
+      if (mounted.current) setPhase('error')
     }
   }, [fetchLive])
 
-  useEffect(() => { init() }, [init])
-
-  // شمارش معکوس + refresh خودکار
   useEffect(() => {
-    const t = setInterval(() => {
-      setCd((c) => {
-        if (c <= 1) { if (isOpen()) fetchLive(); return REFRESH }
-        return c - 1
+    mounted.current = true
+    initialize()
+    return () => { mounted.current = false }
+  }, [initialize])
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const time = new Date()
+      setNow(time)
+      setCountdown((value) => {
+        if (phase !== 'ready') return value
+        if (value <= 1) {
+          fetchLive()
+          return marketIsOpen(time) ? OPEN_REFRESH : CLOSED_REFRESH
+        }
+        return value - 1
       })
     }, 1000)
-    return () => clearInterval(t)
-  }, [fetchLive])
+    return () => clearInterval(timer)
+  }, [fetchLive, phase])
 
-  const open = isOpen()
+  useEffect(() => {
+    const resume = () => { if (document.visibilityState === 'visible' && phase === 'ready') fetchLive() }
+    document.addEventListener('visibilitychange', resume)
+    window.addEventListener('online', resume)
+    return () => { document.removeEventListener('visibilitychange', resume); window.removeEventListener('online', resume) }
+  }, [fetchLive, phase])
 
-  return (
-    <div className="min-h-screen font-dana" dir="rtl"
-      style={{ background: '#07090F', color: '#CBD5E1' }}>
-      <div className="max-w-3xl mx-auto px-4 py-10">
+  const open = marketIsOpen(now)
 
-        {/* ── سربرگ ── */}
-        <div className="flex items-start justify-between mb-8">
-          <div>
-            <h1 className="text-lg font-dana" style={{ fontWeight: 900, color: '#F1F5F9' }}>
-              تریگر تبلیغات صندوق‌ها
-            </h1>
-            <p className="text-xs mt-1" style={{ color: '#475569' }}>
-              خالص خرید حقیقی · آپدیت هر {fa(REFRESH / 60, 0)} دقیقه
-            </p>
-          </div>
-          <div className="flex items-center gap-3 text-xs" style={{ color: '#475569' }}>
-            <span className="flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full"
-                style={{ background: open ? '#22C55E' : '#334155',
-                  boxShadow: open ? '0 0 6px #22C55E' : 'none' }} />
-              <span style={{ color: open ? '#22C55E' : '#475569' }}>
-                {open ? 'بازار باز' : 'بازار بسته'}
-              </span>
-            </span>
-            <span className="tabular-nums">{fmtT(now)}</span>
-            {phase === 'done' && (
-              <button onClick={() => open && fetchLive()}
-                className="tabular-nums px-2.5 py-1 rounded-md"
-                style={{ background: '#0F1623', border: '1px solid #1E293B' }}>
-                {fa(cd, 0)} ث
-              </button>
-            )}
-          </div>
+  return <main className="min-h-screen bg-[#07090F] px-4 py-8 font-dana text-slate-300" dir="rtl">
+    <div className="mx-auto max-w-5xl">
+      <header className="mb-7 flex flex-col gap-4 border-b border-slate-800/70 pb-6 sm:flex-row sm:items-center sm:justify-between">
+        <div><div className="mb-2 flex items-center gap-2 text-xs text-cyan-400"><Radio size={15} />پایش زنده جریان پول</div><h1 className="text-xl text-slate-100" style={{ fontWeight: 900 }}>تریگر تبلیغات صندوق‌ها</h1><p className="mt-2 text-xs text-slate-500">خالص خرید حقیقی امروز در مقایسه با میانگین بیست روز معاملاتی</p></div>
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className={`rounded-md border px-2.5 py-1.5 ${open ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-400' : 'border-slate-700 bg-slate-900 text-slate-500'}`}>{open ? 'بازار باز' : 'بازار بسته'}</span>
+          <span className="rounded-md border border-slate-800 bg-slate-900 px-2.5 py-1.5 tabular-nums text-slate-500">{fmtTime(now)}</span>
+          <button type="button" onClick={() => phase === 'ready' ? fetchLive() : initialize()} disabled={refreshing || phase === 'loading'} className="flex items-center gap-2 rounded-md border border-cyan-500/20 bg-cyan-500/10 px-3 py-1.5 text-cyan-300 disabled:opacity-50"><RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />{phase === 'ready' ? `${fa(countdown, 0)} ث` : 'تلاش دوباره'}</button>
         </div>
+      </header>
 
-        {/* ── لودینگ / خطا ── */}
-        {phase === 'init' && (
-          <div className="flex items-center justify-center gap-3 py-24" style={{ color: '#334155' }}>
-            <div className="w-5 h-5 border-2 rounded-full animate-spin"
-              style={{ borderColor: '#1E293B', borderTopColor: '#3B82F6' }} />
-            <span className="text-sm">در حال بارگذاری...</span>
-          </div>
-        )}
+      {phase === 'loading' && <div className="grid min-h-72 place-items-center"><div className="text-center"><RefreshCw className="mx-auto animate-spin text-cyan-400" /><p className="mt-4 text-sm text-slate-400">در حال تکمیل فهرست صندوق‌ها و ساخت خط مبنا...</p><p className="mt-2 text-xs text-slate-600">بارگذاری اول ممکن است کمی بیشتر طول بکشد.</p></div></div>}
+      {phase === 'error' && <div className="grid min-h-72 place-items-center"><div className="text-center"><WifiOff className="mx-auto text-rose-400" /><p className="mt-4 text-sm text-rose-300">دریافت داده کامل نشد.</p><button onClick={initialize} className="mt-4 rounded-md border border-slate-700 px-4 py-2 text-xs text-slate-300">تلاش دوباره</button></div></div>}
 
-        {phase === 'error' && (
-          <div className="flex flex-col items-center gap-3 py-24">
-            <p className="text-sm" style={{ color: '#EF4444' }}>خطا در دریافت داده</p>
-            <button onClick={init}
-              className="text-xs px-4 py-2 rounded-lg"
-              style={{ background: '#0F1623', border: '1px solid #1E293B', color: '#94A3B8' }}>
-              تلاش دوباره
-            </button>
-          </div>
-        )}
-
-        {/* ── جدول ── */}
-        {phase === 'done' && (
-          <>
-            {/* هدر جدول */}
-            <div className="grid mb-2 px-3 text-xs" style={{
-              color: '#475569',
-              gridTemplateColumns: '1fr 1fr 1fr 1fr 90px',
-              gap: '8px',
-            }}>
-              <span>نوع صندوق</span>
-              <span className="text-center">امروز (میلیارد تومان)</span>
-              <span className="text-center">میانگین ۲۰ روز</span>
-              <span className="text-center">حد تریگر</span>
-              <span className="text-center">وضعیت</span>
+      {phase === 'ready' && <>
+        {liveError && <div className="mb-4 flex items-start gap-2 rounded-lg border border-amber-500/15 bg-amber-500/5 p-3 text-xs leading-6 text-amber-300"><AlertTriangle size={16} className="mt-1 shrink-0" />{liveError}</div>}
+        <div className="hidden grid-cols-[1.2fr_repeat(3,1fr)_100px] gap-3 px-4 pb-2 text-center text-xs text-slate-600 sm:grid"><span className="text-right">نوع صندوق</span><span>امروز</span><span>میانگین ۲۰ روز</span><span>حد تریگر</span><span>وضعیت</span></div>
+        <div className="space-y-2">{rows.map((row) => {
+          const go = row.ratio >= 1
+          const watch = row.ratio >= 0.6 && !go
+          const color = go ? '#22C55E' : watch ? '#F59E0B' : '#EF4444'
+          const label = go ? 'تبلیغ بزن' : watch ? 'نزدیکه' : 'صبر کن'
+          const width = `${Math.max(0, Math.min((row.ratio / 1.5) * 100, 100))}%`
+          return <article key={row.id} className="rounded-lg border border-slate-800 bg-[#0C1118] p-4" style={go ? { borderColor: 'rgba(34,197,94,.2)', background: 'rgba(34,197,94,.035)' } : undefined}>
+            <div className="grid grid-cols-2 items-center gap-4 sm:grid-cols-[1.2fr_repeat(3,1fr)_100px] sm:gap-3">
+              <div><h2 className="text-sm text-slate-100" style={{ fontWeight: 900 }}>{row.label}</h2><span className="mt-1 block text-[0.58rem] text-slate-600">پوشش زنده {fa(row.coverage * 100, 0)}٪</span></div>
+              <div className="text-left sm:text-center"><span className="block text-[0.6rem] text-slate-600 sm:hidden">امروز</span><strong className="tabular-nums" style={{ color: row.today >= 0 ? '#22C55E' : '#EF4444' }}>{row.today >= 0 ? '+' : ''}{fa(row.today)}</strong></div>
+              <div className="sm:text-center"><span className="block text-[0.6rem] text-slate-600 sm:hidden">میانگین ۲۰ روز</span><span className="text-sm tabular-nums text-slate-500">{row.average >= 0 ? '+' : ''}{fa(row.average)}</span></div>
+              <div className="text-left sm:text-center"><span className="block text-[0.6rem] text-slate-600 sm:hidden">حد تریگر</span><span className="text-sm tabular-nums text-slate-500">{row.threshold >= 0 ? '+' : ''}{fa(row.threshold)}</span></div>
+              <div className="col-span-2 text-center sm:col-span-1"><span className="inline-block rounded-md border px-2.5 py-1 text-xs" style={{ color, borderColor: `${color}30`, background: `${color}12`, fontWeight: 800 }}>{label}</span></div>
             </div>
-
-            <div className="flex flex-col gap-2">
-              {rows.map((r) => {
-                const isGo    = r.pct >= 1
-                const isWatch = r.pct >= 0.6 && !isGo
-                const color   = isGo ? '#22C55E' : isWatch ? '#F59E0B' : '#EF4444'
-                const label   = isGo ? 'تبلیغ بزن' : isWatch ? 'نزدیکه' : 'صبر کن'
-                const barW    = `${Math.min((r.pct / 1.5) * 100, 100)}%`
-
-                return (
-                  <div key={r.id} className="rounded-xl px-4 pt-4 pb-3"
-                    style={{
-                      background: isGo ? `rgba(34,197,94,0.04)` : '#0C1118',
-                      border: `1px solid ${isGo ? 'rgba(34,197,94,0.18)' : '#161D2A'}`,
-                    }}>
-                    <div className="grid items-center" style={{
-                      gridTemplateColumns: '1fr 1fr 1fr 1fr 90px',
-                      gap: '8px',
-                    }}>
-                      {/* نام */}
-                      <span className="font-dana text-sm" style={{ fontWeight: 800, color: '#E2E8F0' }}>
-                        {r.label}
-                      </span>
-
-                      {/* امروز */}
-                      <div className="text-center">
-                        <span className="font-dana tabular-nums text-base"
-                          style={{ fontWeight: 900, color: r.today >= 0 ? '#22C55E' : '#EF4444' }}>
-                          {(r.today >= 0 ? '+' : '') + fa(r.today)}
-                        </span>
-                      </div>
-
-                      {/* میانگین */}
-                      <div className="text-center">
-                        <span className="font-dana tabular-nums text-sm"
-                          style={{ fontWeight: 700, color: '#64748B' }}>
-                          {(r.avg >= 0 ? '+' : '') + fa(r.avg)}
-                        </span>
-                      </div>
-
-                      {/* حد */}
-                      <div className="text-center">
-                        <span className="font-dana tabular-nums text-sm"
-                          style={{ fontWeight: 700, color: '#475569' }}>
-                          {(r.threshold >= 0 ? '+' : '') + fa(r.threshold)}
-                        </span>
-                      </div>
-
-                      {/* وضعیت */}
-                      <div className="text-center">
-                        <span className="inline-block text-xs font-dana px-2.5 py-1 rounded-md"
-                          style={{
-                            background: color + '14',
-                            color,
-                            fontWeight: 800,
-                            border: `1px solid ${color}30`,
-                          }}>
-                          {label}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* نوار پیشرفت */}
-                    <div className="mt-3 h-0.5 rounded-full overflow-hidden" style={{ background: '#1E293B' }}>
-                      <div className="h-full rounded-full"
-                        style={{ width: barW, background: color, transition: 'width 0.8s ease' }} />
-                    </div>
-                    <div className="flex justify-between mt-1 text-xs tabular-nums" style={{ color: '#1E293B' }}>
-                      <span>۰</span>
-                      <span style={{ color: r.pct > 0 ? '#334155' : '#1E293B' }}>
-                        {fa(r.pct * 100, 0)}٪
-                      </span>
-                      <span>۱۵۰٪</span>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-
-            {ts && (
-              <p className="text-center text-xs mt-6" style={{ color: '#1E293B' }}>
-                آخرین آپدیت {fmtT(ts)}
-              </p>
-            )}
-          </>
-        )}
-      </div>
+            <div className="mt-3 h-1 overflow-hidden rounded-full bg-slate-800"><div className="h-full rounded-full transition-[width] duration-700" style={{ width, background: color }} /></div>
+          </article>
+        })}</div>
+        <footer className="mt-5 flex items-center justify-between text-[0.65rem] text-slate-600"><span>ارقام: میلیارد تومان</span><span>آخرین داده سالم: {fmtTime(updatedAt)}</span></footer>
+      </>}
     </div>
-  )
+  </main>
 }

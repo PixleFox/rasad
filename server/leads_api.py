@@ -10,6 +10,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 DB_PATH = os.getenv('RASAD_DB_PATH', '/var/lib/rasad/leads.db')
 ADMIN_USER = os.getenv('RASAD_ADMIN_USER', 'admin')
 ADMIN_PASSWORD = os.getenv('RASAD_ADMIN_PASSWORD', '')
+TRIGGER_BASELINE_PATH = os.getenv('TRIGGER_BASELINE_PATH', '/var/lib/rasad/trigger_baseline.json')
 
 
 def connect():
@@ -129,6 +130,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(500, {'error': 'server error'})
 
     def do_GET(self):
+        if self.path == '/api/trigger-baseline':
+            return self.get_trigger_baseline()
         if self.path == '/api/exchange-rate':
             return self.get_exchange_rate()
         if self.path == '/api/risk-assessments/admin':
@@ -148,6 +151,13 @@ class Handler(BaseHTTPRequestHandler):
               GROUP BY u.id ORDER BY u.created_at DESC
             ''').fetchall()
         self.send_json(200, {'rows': [dict(row) for row in rows]})
+
+    def get_trigger_baseline(self):
+        try:
+            with open(TRIGGER_BASELINE_PATH, encoding='utf-8') as baseline_file:
+                self.send_json(200, json.load(baseline_file))
+        except (FileNotFoundError, json.JSONDecodeError):
+            self.send_json(503, {'error': 'trigger baseline unavailable'})
 
     def get_exchange_rate(self):
         with connect() as db:

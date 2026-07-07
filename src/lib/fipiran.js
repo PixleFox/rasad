@@ -265,33 +265,27 @@ export function fetchFundCompare(startDate, maxBack = 12) {
 
     // Fipiran occasionally omits individual funds from an otherwise valid day.
     // Build a mandatory, date-aware union from the closest preceding snapshots.
-    // Forty-five populated days with no new fund is the completion threshold; the
-    // hard ceiling protects the API while covering sparse-reporting fund types.
+    // A full rolling quarter is scanned for every requested date. Processing the
+    // window in large batches prevents sparse/old records from extending loading
+    // indefinitely while still covering funds that report only occasionally.
     const merged = new Map(base.funds.map((fund) => [fund.regNo, {
       ...fund,
       stale: base.date !== startDate,
       staleDate: base.date !== startDate ? base.date : null,
       dataDate: base.date,
     }]))
-    let populatedDays = 0
-    let quietDays = 0
-    const maxHistoryDays = 370
-    const batchSize = 7
+    const maxHistoryDays = 90
+    const batchSize = 30
 
-    for (let offset = 1; offset <= maxHistoryDays && quietDays < 45; offset += batchSize) {
+    for (let offset = 1; offset <= maxHistoryDays; offset += batchSize) {
       const dates = Array.from({ length: Math.min(batchSize, maxHistoryDays - offset + 1) }, (_, index) => shiftISO(base.date, -(offset + index)))
       const snapshots = await Promise.all(dates.map(fetchRawFundCompare))
       for (const snapshot of snapshots) {
         if (!snapshot) continue
-        populatedDays += 1
-        let additions = 0
         for (const fund of snapshot.funds) {
           if (merged.has(fund.regNo)) continue
           merged.set(fund.regNo, { ...fund, stale: true, staleDate: snapshot.date, dataDate: snapshot.date })
-          additions += 1
         }
-        quietDays = additions > 0 ? 0 : quietDays + 1
-        if (populatedDays >= 45 && quietDays >= 45) break
       }
     }
 
