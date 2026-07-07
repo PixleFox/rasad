@@ -227,6 +227,21 @@ export async function fetchCodalNews(count = 100) {
 // fire duplicate walk-back chains that Fipiran throttles.
 const _cache = new Map() // completed snapshots by requested date
 const _inflight = new Map()
+const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))
+
+async function fetchSnapshotFromServer(date) {
+  const deadline = Date.now() + 20 * 60 * 1000
+  while (Date.now() < deadline) {
+    const response = await fetch(`/api/funds/compare?date=${encodeURIComponent(date)}`)
+    if (response.status === 202) {
+      await wait(2000)
+      continue
+    }
+    if (!response.ok) throw new Error('داده‌ای برای این بازه پیدا نشد')
+    return response.json()
+  }
+  throw new Error('دریافت این بازه بیش از حد معمول طول کشید؛ دوباره تلاش کنید')
+}
 
 // Fetches the all-funds comparison snapshot for a date, walking back day-by-day
 // (holidays/weekends have no data) until a populated snapshot is found.
@@ -235,9 +250,7 @@ export function fetchFundCompare(startDate) {
   if (_inflight.has(startDate)) return _inflight.get(startDate)
 
   const promise = (async () => {
-    const response = await fetch(`/api/funds/compare?date=${encodeURIComponent(startDate)}`)
-    if (!response.ok) throw new Error('داده‌ای برای این بازه پیدا نشد')
-    const payload = await response.json()
+    const payload = await fetchSnapshotFromServer(startDate)
     const funds = (payload.items || []).map(normalize).map((fund) => ({
       ...fund,
       stale: fund.dataDate !== payload.date,

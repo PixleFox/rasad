@@ -4,7 +4,9 @@ import json
 import os
 import re
 import sqlite3
-from datetime import datetime, timezone
+import threading
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
@@ -15,6 +17,9 @@ ADMIN_USER = os.getenv('RASAD_ADMIN_USER', 'admin')
 ADMIN_PASSWORD = os.getenv('RASAD_ADMIN_PASSWORD', '')
 TRIGGER_BASELINE_PATH = os.getenv('TRIGGER_BASELINE_PATH', '/var/lib/rasad/trigger_baseline.json')
 API_PORT = int(os.getenv('RASAD_API_PORT', '8787'))
+HISTORICAL_EXECUTOR = ThreadPoolExecutor(max_workers=3)
+HISTORICAL_JOBS = {}
+HISTORICAL_JOBS_LOCK = threading.Lock()
 
 
 def connect():
@@ -164,7 +169,27 @@ class Handler(BaseHTTPRequestHandler):
         if not re.fullmatch(r'\d{4}-\d{2}-\d{2}', requested_day):
             return self.send_json(400, {'error': 'invalid date'})
         try:
-            self.send_json(200, compare_snapshot(requested_day))
+            requested_date = datetime.strptime(requested_day, '%Y-%m-%d').date()
+            one_year_ago = datetime.now().date() - timedelta(days=365)
+            if requested_date >= one_year_ago:
+                return self.send_json(200, compare_snapshot(requested_day))
+
+            # Historical source reads can exceed the reverse proxy timeout. Run
+            # them once in the background and let the browser poll this endpoint.
+            with HISTORICAL_JOBS_LOCK:
+                job = HISTORICAL_JOBS.get(requested_day)
+                if job is None:
+                    job = HISTORICAL_EXECUTOR.submit(compare_snapshot, requested_day)
+                    HISTORICAL_JOBS[requested_day] = job
+            if not job.done():
+                return self.send_json(202, {'status': 'loading', 'date': requested_day})
+            try:
+                result = job.result()
+            except Exception:
+                with HISTORICAL_JOBS_LOCK:
+                    HISTORICAL_JOBS.pop(requested_day, None)
+                raise
+            self.send_json(200, result)
         except ValueError:
             self.send_json(400, {'error': 'invalid date'})
         except Exception:
