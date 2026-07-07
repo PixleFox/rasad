@@ -1,0 +1,4 @@
+# Install with: crontab server/rasad-fipiran.cron
+# Runs at 00:00, 09:00 and 14:00 Iran time and refreshes the latest week.
+CRON_TZ=Asia/Tehran
+0 0,9,14 * * * cd /opt/rasad && /usr/bin/python3 server/update_fipiran_data.py --days 7 --refresh >> /var/log/rasad-fipiran.log 2>&1

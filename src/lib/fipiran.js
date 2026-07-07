@@ -1,10 +1,6 @@
 // ── Fipiran data layer ──────────────────────────────────────────────────────
-// All requests go through the Vite dev proxy at /fipiran (see vite.config.js),
-// which forwards to https://www.fipiran.com/services with a browser UA and
-// SSL verification disabled. In production this path must be served by a
-// serverless function / proxy with the same behaviour.
-
-const BASE = '/fipiran/fund'
+// Fund snapshots are served by Rasad's API. The server persists Fipiran data,
+// merges sparse reporting days, and only contacts the source when data is absent.
 
 // fundType numeric codes → Persian labels (derived from live data sampling)
 export const FUND_TYPES = {
@@ -135,6 +131,7 @@ function normalize(it) {
       other: Number(it.other) || 0,
     },
     website: Array.isArray(it.websiteAddress) ? it.websiteAddress[0] : it.websiteAddress || null,
+    dataDate: it._rasadDataDate || null,
   }
 }
 
@@ -230,68 +227,25 @@ export async function fetchCodalNews(count = 100) {
 // fire duplicate walk-back chains that Fipiran throttles.
 const _cache = new Map() // completed snapshots by requested date
 const _inflight = new Map()
-const _rawCache = new Map() // exact-date responses, including empty dates
-const _rawInflight = new Map()
-
-function fetchRawFundCompare(date) {
-  if (_rawCache.has(date)) return Promise.resolve(_rawCache.get(date))
-  if (_rawInflight.has(date)) return _rawInflight.get(date)
-  const promise = fetch(`${BASE}/fundcompare?date=${date}`)
-    .then((res) => res.ok ? res.json() : null)
-    .then((json) => {
-      const snapshot = json?.items?.length ? { date, funds: json.items.map(normalize) } : null
-      _rawCache.set(date, snapshot)
-      return snapshot
-    })
-    .catch(() => { _rawCache.set(date, null); return null })
-    .finally(() => _rawInflight.delete(date))
-  _rawInflight.set(date, promise)
-  return promise
-}
 
 // Fetches the all-funds comparison snapshot for a date, walking back day-by-day
 // (holidays/weekends have no data) until a populated snapshot is found.
-export function fetchFundCompare(startDate, maxBack = 12) {
+export function fetchFundCompare(startDate) {
   if (_cache.has(startDate)) return Promise.resolve(_cache.get(startDate))
   if (_inflight.has(startDate)) return _inflight.get(startDate)
 
   const promise = (async () => {
-    let base = null
-    for (let i = 0; i < maxBack; i++) {
-      base = await fetchRawFundCompare(shiftISO(startDate, -i))
-      if (base) break
-    }
-    if (!base) throw new Error('داده‌ای برای این بازه پیدا نشد')
-
-    // Fipiran occasionally omits individual funds from an otherwise valid day.
-    // Build a mandatory, date-aware union from the closest preceding snapshots.
-    // A full rolling quarter is scanned for every requested date. Processing the
-    // window in large batches prevents sparse/old records from extending loading
-    // indefinitely while still covering funds that report only occasionally.
-    const merged = new Map(base.funds.map((fund) => [fund.regNo, {
+    const response = await fetch(`/api/funds/compare?date=${encodeURIComponent(startDate)}`)
+    if (!response.ok) throw new Error('داده‌ای برای این بازه پیدا نشد')
+    const payload = await response.json()
+    const funds = (payload.items || []).map(normalize).map((fund) => ({
       ...fund,
-      stale: base.date !== startDate,
-      staleDate: base.date !== startDate ? base.date : null,
-      dataDate: base.date,
-    }]))
-    const maxHistoryDays = 90
-    const batchSize = 30
-
-    for (let offset = 1; offset <= maxHistoryDays; offset += batchSize) {
-      const dates = Array.from({ length: Math.min(batchSize, maxHistoryDays - offset + 1) }, (_, index) => shiftISO(base.date, -(offset + index)))
-      const snapshots = await Promise.all(dates.map(fetchRawFundCompare))
-      for (const snapshot of snapshots) {
-        if (!snapshot) continue
-        for (const fund of snapshot.funds) {
-          if (merged.has(fund.regNo)) continue
-          merged.set(fund.regNo, { ...fund, stale: true, staleDate: snapshot.date, dataDate: snapshot.date })
-        }
-      }
-    }
-
-    const funds = [...merged.values()]
+      stale: fund.dataDate !== payload.date,
+      staleDate: fund.dataDate !== payload.date ? fund.dataDate : null,
+      dataDate: fund.dataDate || payload.date,
+    }))
     const out = {
-      date: base.date,
+      date: payload.date,
       funds,
       staleFundsCount: funds.filter((fund) => fund.stale).length,
     }

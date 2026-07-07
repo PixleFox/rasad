@@ -6,11 +6,15 @@ import re
 import sqlite3
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import parse_qs, urlparse
+
+from fipiran_store import compare_snapshot
 
 DB_PATH = os.getenv('RASAD_DB_PATH', '/var/lib/rasad/leads.db')
 ADMIN_USER = os.getenv('RASAD_ADMIN_USER', 'admin')
 ADMIN_PASSWORD = os.getenv('RASAD_ADMIN_PASSWORD', '')
 TRIGGER_BASELINE_PATH = os.getenv('TRIGGER_BASELINE_PATH', '/var/lib/rasad/trigger_baseline.json')
+API_PORT = int(os.getenv('RASAD_API_PORT', '8787'))
 
 
 def connect():
@@ -130,13 +134,16 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(500, {'error': 'server error'})
 
     def do_GET(self):
-        if self.path == '/api/trigger-baseline':
+        parsed = urlparse(self.path)
+        if parsed.path == '/api/funds/compare':
+            return self.get_fund_compare(parse_qs(parsed.query))
+        if parsed.path == '/api/trigger-baseline':
             return self.get_trigger_baseline()
-        if self.path == '/api/exchange-rate':
+        if parsed.path == '/api/exchange-rate':
             return self.get_exchange_rate()
-        if self.path == '/api/risk-assessments/admin':
+        if parsed.path == '/api/risk-assessments/admin':
             return self.get_risk_assessments()
-        if self.path != '/api/export-leads/admin':
+        if parsed.path != '/api/export-leads/admin':
             return self.send_json(404, {'error': 'not found'})
         if not self.authorized():
             self.send_response(401)
@@ -151,6 +158,17 @@ class Handler(BaseHTTPRequestHandler):
               GROUP BY u.id ORDER BY u.created_at DESC
             ''').fetchall()
         self.send_json(200, {'rows': [dict(row) for row in rows]})
+
+    def get_fund_compare(self, query):
+        requested_day = str((query.get('date') or [''])[0])
+        if not re.fullmatch(r'\d{4}-\d{2}-\d{2}', requested_day):
+            return self.send_json(400, {'error': 'invalid date'})
+        try:
+            self.send_json(200, compare_snapshot(requested_day))
+        except ValueError:
+            self.send_json(400, {'error': 'invalid date'})
+        except Exception:
+            self.send_json(503, {'error': 'fund data temporarily unavailable'})
 
     def get_trigger_baseline(self):
         try:
@@ -196,4 +214,4 @@ class Handler(BaseHTTPRequestHandler):
 if __name__ == '__main__':
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     connect().close()
-    ThreadingHTTPServer(('127.0.0.1', 8787), Handler).serve_forever()
+    ThreadingHTTPServer(('127.0.0.1', API_PORT), Handler).serve_forever()

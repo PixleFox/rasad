@@ -16,20 +16,6 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/tsetmc/, '/api'),
       },
-      // Dev proxy to Fipiran. secure:false bypasses their broken SSL cert
-      // (equivalent to rejectUnauthorized:false), and we spoof a browser UA
-      // because Fipiran blocks non-browser requests.
-      '/fipiran': {
-        target: 'https://www.fipiran.com',
-        changeOrigin: true,
-        secure: false,
-        rewrite: (p) => p.replace(/^\/fipiran/, '/services'),
-        headers: {
-          'User-Agent':
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-          Accept: 'application/json',
-        },
-      },
     },
   },
 })

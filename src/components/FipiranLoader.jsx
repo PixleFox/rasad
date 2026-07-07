@@ -2,9 +2,12 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useState, useEffect } from 'react'
 import { fetchCodalNews } from '../lib/fipiran'
 
-const LOADING_TEXT = 'در حال دریافت اطلاعات از مراجع'
+const DEFAULT_LOADING_TEXT = 'در حال دریافت اطلاعات از پایگاه داده رصد'
 
-export default function FipiranLoader({ loading }) {
+export default function FipiranLoader({ loading, slow = false }) {
+  const loadingText = slow
+    ? 'این بازه قدیمی است؛ دریافت اطلاعات کمی زمان می‌برد'
+    : DEFAULT_LOADING_TEXT
   const [codalNews, setCodalNews] = useState([])
   const [newsIdx, setNewsIdx] = useState(0)
   const [dots, setDots]       = useState(1)
@@ -26,7 +29,7 @@ export default function FipiranLoader({ loading }) {
     setDots(1)
     const typing = setInterval(() => {
       setTypedLength((length) => {
-        if (length >= LOADING_TEXT.length) {
+        if (length >= loadingText.length) {
           clearInterval(typing)
           return length
         }
@@ -34,13 +37,13 @@ export default function FipiranLoader({ loading }) {
       })
     }, 55)
     return () => clearInterval(typing)
-  }, [loading])
+  }, [loading, loadingText])
 
   useEffect(() => {
-    if (!loading || typedLength < LOADING_TEXT.length) return
+    if (!loading || typedLength < loadingText.length) return
     const dotTimer = setInterval(() => setDots((count) => count === 3 ? 1 : count + 1), 650)
     return () => clearInterval(dotTimer)
-  }, [loading, typedLength])
+  }, [loading, typedLength, loadingText])
 
   return (
     <AnimatePresence>
@@ -114,8 +117,8 @@ export default function FipiranLoader({ loading }) {
             {/* Loading text */}
             <div className="h-7 flex items-center justify-center">
               <p className="text-sm font-dana text-center" style={{ fontWeight: 700, color: '#00D4FF' }}>
-                {LOADING_TEXT.slice(0, typedLength)}
-                {typedLength >= LOADING_TEXT.length && (
+                {loadingText.slice(0, typedLength)}
+                {typedLength >= loadingText.length && (
                   <span className="inline-block w-5 text-right" dir="ltr">{'.'.repeat(dots)}</span>
                 )}
               </p>

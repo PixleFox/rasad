@@ -22,9 +22,12 @@ export default function FundsPageLayout({
   floatAsset,
   children,
 }) {
+  const oneYearAgo = new Date()
+  oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1)
+  const slowLoad = Boolean(startISO && new Date(`${startISO}T00:00:00`) < oneYearAgo)
   return (
     <main className="relative min-h-screen overflow-hidden">
-      <FipiranLoader loading={loading} />
+      <FipiranLoader loading={loading} slow={slowLoad} />
       {/* Background */}
       <div className="absolute inset-0 pointer-events-none">
         <div className="absolute top-0 left-1/3 w-[600px] h-[400px] bg-neon-violet/10 blur-[140px] rounded-full" />
@@ -78,7 +81,7 @@ export default function FundsPageLayout({
               {loading ? (
                 <span className="inline-flex items-center gap-2 text-neon-cyan">
                   <span className="w-3 h-3 rounded-full border-2 border-neon-cyan/30 border-t-neon-cyan animate-spin" />
-                  در حال دریافت داده‌ی زنده از فیپیران…
+                  {slowLoad ? 'دریافت این بازه قدیمی کمی زمان می‌برد…' : 'در حال دریافت داده از پایگاه داده رصد…'}
                 </span>
               ) : (
                 <>

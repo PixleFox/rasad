@@ -29,6 +29,9 @@ export default function Aggregate() {
   const [endDate, setEndDate] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const oneYearAgo = new Date()
+  oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1)
+  const slowLoad = new Date(`${startISO}T00:00:00`) < oneYearAgo
 
   useEffect(() => {
     let cancelled = false
@@ -63,7 +66,7 @@ export default function Aggregate() {
 
   return (
     <main className="relative min-h-screen overflow-hidden">
-      <FipiranLoader loading={loading} />
+      <FipiranLoader loading={loading} slow={slowLoad} />
       {/* Background */}
       <div className="absolute inset-0 pointer-events-none">
         <div className="absolute top-0 left-1/3 w-[600px] h-[400px] bg-neon-violet/10 blur-[140px] rounded-full" />
