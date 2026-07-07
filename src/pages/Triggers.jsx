@@ -45,19 +45,6 @@ async function tse(path, { timeout = 9000, attempts = 2 } = {}) {
   throw lastError
 }
 
-async function mapLimited(items, limit, mapper) {
-  const results = new Array(items.length)
-  let cursor = 0
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => {
-    while (cursor < items.length) {
-      const index = cursor
-      cursor += 1
-      try { results[index] = await mapper(items[index]) } catch { results[index] = null }
-    }
-  }))
-  return results
-}
-
 export default function Triggers() {
   const [phase, setPhase] = useState('loading')
   const [rows, setRows] = useState([])
@@ -68,7 +55,6 @@ export default function Triggers() {
   const [liveError, setLiveError] = useState('')
   const fundsByType = useRef({})
   const averageByType = useRef({})
-  const priceCache = useRef(new Map())
   const refreshLock = useRef(false)
   const mounted = useRef(true)
   const hasRows = useRef(false)
@@ -96,16 +82,6 @@ export default function Triggers() {
     try {
       const clientPayload = await tse('ClientType/GetClientTypeAll', { timeout: 12000, attempts: 3 })
       const clientMap = new Map((clientPayload.clientTypeAllDto || []).map((item) => [String(item.insCode), item]))
-      const allFunds = [...new Map(TYPES.flatMap((type) => fundsByType.current[type.id] || []).map((fund) => [String(fund.insCode), fund])).values()]
-      const prices = await mapLimited(allFunds, 12, async (fund) => {
-        const payload = await tse(`ClosingPrice/GetClosingPriceInfo/${fund.insCode}`)
-        const info = payload.closingPriceInfo
-        const price = info?.pClosing ?? info?.pDrCotVal
-        if (!Number.isFinite(Number(price)) || Number(price) <= 0) return null
-        priceCache.current.set(String(fund.insCode), Number(price))
-        return Number(price)
-      })
-      const priceMap = new Map(allFunds.map((fund, index) => [String(fund.insCode), prices[index] ?? priceCache.current.get(String(fund.insCode))]))
       const flows = {}
       const coverage = {}
 
@@ -116,7 +92,7 @@ export default function Triggers() {
         for (const fund of list) {
           const key = String(fund.insCode)
           const client = clientMap.get(key)
-          const price = priceMap.get(key)
+          const price = Number(fund.referencePrice)
           if (!client || !price) continue
           total += ((client.buy_I_Volume ?? 0) - (client.sell_I_Volume ?? 0)) * price / 1e10
           valid += 1

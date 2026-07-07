@@ -60,6 +60,7 @@ def main():
             'regNo': reg_no,
             'insCode': ins_code,
             'name': item.get('name') or '',
+            'referencePrice': float(item.get('cancelNav') or item.get('statisticalNav') or item.get('issueNav') or 0),
         })
         old = previous.get(reg_no)
         nav = float(item.get('cancelNav') or item.get('statisticalNav') or item.get('issueNav') or 0)
