@@ -194,7 +194,7 @@ export const blogPosts = [
       },
     ],
     relatedLinks: [
-      { label: 'آزمون ریسک‌پذیری و پیشنهاد صندوق', to: '/recommendation' },
+      { label: 'تست ریسک پذیری و پیشنهاد صندوق', to: '/risk-assessment' },
       { label: 'صندوق‌های اهرمی', to: '/funds/leveraged' },
       { label: 'صندوق‌های سهامی', to: '/funds/equity' },
     ],

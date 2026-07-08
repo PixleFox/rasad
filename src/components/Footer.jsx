@@ -14,6 +14,7 @@ const links = {
   'ابزارها': [
     { label: 'سامانه مقایسه', to: '/compare' },
     { label: 'اطلاعات تجمیعی', to: '/aggregate' },
+    { label: 'تست ریسک پذیری', to: '/risk-assessment' },
     { label: 'مدیران صندوق‌ها', to: '/managers' },
     { label: 'مارکتینگ صندوق‌ها', to: '/marketing' },
     { label: 'رتبه‌بندی صندوق‌ها', to: '/ranking' },

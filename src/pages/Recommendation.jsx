@@ -21,6 +21,7 @@ import {
 } from 'lucide-react'
 import { getDimensions, getRiskProfile, riskQuestions } from '../data/riskAssessment'
 import { getRiskRecommendation } from '../data/riskRecommendations'
+import RiskSeoContent from '../components/RiskSeoContent'
 import { isValidIranianMobile, normalizePhone } from '../lib/exportLeads'
 import { enrichFunds, faNum } from '../lib/fipiran'
 import { exportRiskReport } from '../lib/riskPdf'
@@ -36,20 +37,25 @@ const genderOptions = ['زن', 'مرد', 'ترجیح می‌دهم نگویم']
 
 function Intro({ onStart }) {
   return (
-    <motion.div key="intro" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="mx-auto max-w-4xl text-center">
-      <div className="mx-auto mb-5 grid h-16 w-16 place-items-center rounded-2xl border border-neon-green/30 bg-neon-green/10 text-neon-green shadow-[0_0_30px_rgba(0,255,157,0.18)]"><Sparkles size={30} /></div>
-      <span className="text-xs text-neon-green" style={{ fontWeight: 800 }}>پیشنهاد اختصاصی رصد</span>
-      <h1 className="mx-auto mt-3 max-w-3xl text-3xl leading-relaxed text-white sm:text-5xl sm:leading-relaxed" style={{ fontWeight: 900 }}>
-        قبل از پیشنهاد پورتفوی اختصاصی، باید شما را کمی بهتر بشناسیم.
-      </h1>
-      <p className="mx-auto mt-4 max-w-2xl text-sm leading-7 text-text-muted sm:text-base">دوازده موقعیت واقعی، بدون پاسخ درست یا غلط. همان گزینه‌ای را انتخاب کنید که واقعاً به رفتار شما نزدیک‌تر است.</p>
-      <div className="mt-9 grid gap-px overflow-hidden rounded-lg border border-neon-cyan/10 bg-neon-cyan/10 text-right sm:grid-cols-3">
-        {steps.map(({ icon: Icon, title, text }) => <div key={title} className="bg-space/95 p-5"><Icon size={21} className="mb-3 text-neon-cyan" /><h2 className="text-sm text-white" style={{ fontWeight: 900 }}>{title}</h2><p className="mt-2 text-xs leading-6 text-text-muted">{text}</p></div>)}
+    <motion.div key="intro" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
+      <div className="mx-auto max-w-4xl text-center">
+        <div className="mx-auto mb-5 grid h-16 w-16 place-items-center rounded-2xl border border-neon-green/30 bg-neon-green/10 text-neon-green shadow-[0_0_30px_rgba(0,255,157,0.18)]"><Sparkles size={30} /></div>
+        <span className="text-xs text-neon-green" style={{ fontWeight: 800 }}>پیشنهاد اختصاصی رصد</span>
+        <h1 className="mx-auto mt-3 max-w-3xl text-3xl leading-relaxed text-white sm:text-5xl sm:leading-relaxed" style={{ fontWeight: 900 }}>
+          تست ریسک پذیری و آزمون ریسک سنجی سرمایه‌گذاری
+        </h1>
+        <p className="mx-auto mt-4 max-w-2xl text-sm leading-7 text-text-muted sm:text-base">
+          با آزمون ریسک پذیری رصد، تیپ سرمایه‌گذاری خود را بشناسید و بر اساس داده‌های روز صندوق‌ها، پیشنهاد متناسب با سطح ریسک خود دریافت کنید.
+        </p>
+        <div className="mt-9 grid gap-px overflow-hidden rounded-lg border border-neon-cyan/10 bg-neon-cyan/10 text-right sm:grid-cols-3">
+          {steps.map(({ icon: Icon, title, text }) => <div key={title} className="bg-space/95 p-5"><Icon size={21} className="mb-3 text-neon-cyan" /><h2 className="text-sm text-white" style={{ fontWeight: 900 }}>{title}</h2><p className="mt-2 text-xs leading-6 text-text-muted">{text}</p></div>)}
+        </div>
+        <button onClick={onStart} className="group mx-auto mt-8 flex h-12 items-center gap-3 rounded-lg bg-neon-green px-6 text-sm text-space shadow-[0_0_28px_rgba(0,255,157,0.25)] transition-all hover:-translate-y-0.5 hover:bg-white" style={{ fontWeight: 900 }}>
+          شروع تست ریسک سنجی<ArrowLeft size={18} className="transition-transform group-hover:-translate-x-1" />
+        </button>
+        <p className="mt-4 text-[0.65rem] text-text-muted/70">نتیجه جنبه آموزشی دارد و جایگزین مشاوره مالی دارای مجوز نیست.</p>
       </div>
-      <button onClick={onStart} className="group mx-auto mt-8 flex h-12 items-center gap-3 rounded-lg bg-neon-green px-6 text-sm text-space shadow-[0_0_28px_rgba(0,255,157,0.25)] transition-all hover:-translate-y-0.5 hover:bg-white" style={{ fontWeight: 900 }}>
-        شروع شناخت من<ArrowLeft size={18} className="transition-transform group-hover:-translate-x-1" />
-      </button>
-      <p className="mt-4 text-[0.65rem] text-text-muted/70">نتیجه جنبه آموزشی دارد و جایگزین مشاوره مالی دارای مجوز نیست.</p>
+      <RiskSeoContent onStart={onStart} />
     </motion.div>
   )
 }

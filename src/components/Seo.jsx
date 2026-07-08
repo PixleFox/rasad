@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
 import { getBlogPost } from '../data/blogPosts'
+import { riskSeoFaq, riskSeoKeywords, riskSeoPage } from '../data/riskSeo'
 
 const DEFAULT = {
   title: 'رصد | تحلیل و مقایسه صندوق‌های سرمایه‌گذاری',
@@ -25,7 +26,10 @@ const pages = {
   '/compare': { title: 'مقایسه صندوق‌های سرمایه‌گذاری | رصد', description: 'مقایسه مستقیم عملکرد، ریسک، دارایی و شاخص رصد صندوق‌های سرمایه‌گذاری.' },
   '/marketing': { title: 'تحلیل بازاریابی صندوق‌های سرمایه‌گذاری | رصد', description: 'تحلیل جریان پول، بازارگردانی و عملکرد بازاریابی صندوق‌های سرمایه‌گذاری.' },
   '/live-flow': { title: 'جریان زنده پول صندوق‌ها | رصد', description: 'رصد جریان ورود و خروج پول و معاملات صندوق‌های قابل معامله.' },
-  '/recommendation': { title: 'آزمون ریسک‌پذیری و پیشنهاد صندوق | رصد', description: 'با آزمون رفتاری رصد، تیپ سرمایه‌گذاری خود را بشناسید و پیشنهاد صندوق دریافت کنید.' },
+  '/recommendation': { title: riskSeoPage.title, description: riskSeoPage.description },
+  '/risk-assessment': { title: riskSeoPage.title, description: riskSeoPage.description },
+  '/risk-test': { title: riskSeoPage.title, description: riskSeoPage.description },
+  '/risk-profile-test': { title: riskSeoPage.title, description: riskSeoPage.description },
   '/blog': { title: 'وبلاگ رصد | راهنمای صندوق‌های سرمایه‌گذاری', description: 'آموزش و راهنمای انتخاب، مقایسه و رتبه‌بندی صندوق‌های سرمایه‌گذاری ایران با داده‌های رصد.' },
   '/about': { title: 'درباره رصد | تحلیل صندوق‌های سرمایه‌گذاری', description: 'رصد، پلتفرم تحلیل داده و مقایسه صندوق‌های سرمایه‌گذاری ایران.' },
 }
@@ -57,12 +61,14 @@ export default function Seo() {
     const managerPage = pathname.startsWith('/managers/')
     const blogMatch = pathname.match(/^\/blog\/([^/]+)$/)
     const blogPost = blogMatch ? getBlogPost(decodeURIComponent(blogMatch[1])) : null
+    const riskPage = pathname === '/recommendation' || pathname === '/risk-assessment' || pathname === '/risk-test' || pathname === '/risk-profile-test'
     const page = blogPost
       ? { title: `${blogPost.title} | رصد`, description: blogPost.description }
       : managerPage
       ? { title: 'اطلاعات مدیر صندوق | رصد', description: 'داشبورد دارایی، عملکرد و صندوق‌های تحت مدیریت نهاد مالی.' }
       : pages[pathname] || DEFAULT
-    const canonicalUrl = `https://ra100.ir${pathname === '/' ? '/' : pathname.replace(/\/$/, '')}`
+    const canonicalPath = riskPage ? riskSeoPage.canonicalPath : pathname === '/' ? '/' : pathname.replace(/\/$/, '')
+    const canonicalUrl = `https://ra100.ir${canonicalPath}`
     const noindex = pathname.startsWith('/admin/') || pathname === '/triggers'
     document.title = page.title
     setMeta('meta[name="description"]', { name: 'description', content: page.description })
@@ -71,7 +77,7 @@ export default function Seo() {
     setMeta('meta[property="og:description"]', { property: 'og:description', content: page.description })
     setMeta('meta[property="og:url"]', { property: 'og:url', content: canonicalUrl })
     setMeta('meta[property="og:type"]', { property: 'og:type', content: blogPost ? 'article' : 'website' })
-    setMeta('meta[name="keywords"]', { name: 'keywords', content: blogPost ? blogPost.keywords.join('، ') : 'مقایسه صندوق سرمایه‌گذاری، صندوق درآمد ثابت، صندوق طلا، رتبه‌بندی صندوق‌ها، رصد' })
+    setMeta('meta[name="keywords"]', { name: 'keywords', content: blogPost ? blogPost.keywords.join('، ') : riskPage ? riskSeoKeywords.join('، ') : 'مقایسه صندوق سرمایه‌گذاری، صندوق درآمد ثابت، صندوق طلا، رتبه‌بندی صندوق‌ها، رصد' })
     let canonical = document.head.querySelector('link[rel="canonical"]')
     if (!canonical) { canonical = document.createElement('link'); canonical.rel = 'canonical'; document.head.appendChild(canonical) }
     canonical.href = canonicalUrl
@@ -88,14 +94,24 @@ export default function Seo() {
       author: { '@type': 'Organization', name: 'رصد' },
       publisher: { '@type': 'Organization', name: 'رصد', url: 'https://ra100.ir' },
     } : null)
-    setJsonLd('faq', blogPost ? {
+    setJsonLd('faq', blogPost || riskPage ? {
       '@context': 'https://schema.org',
       '@type': 'FAQPage',
-      mainEntity: blogPost.faq.map((item) => ({
+      mainEntity: (blogPost ? blogPost.faq : riskSeoFaq).map((item) => ({
         '@type': 'Question',
         name: item.question,
         acceptedAnswer: { '@type': 'Answer', text: item.answer },
       })),
+    } : null)
+    setJsonLd('webapp', riskPage ? {
+      '@context': 'https://schema.org',
+      '@type': 'WebApplication',
+      name: 'تست ریسک پذیری رصد',
+      url: 'https://ra100.ir/risk-assessment',
+      applicationCategory: 'FinanceApplication',
+      inLanguage: 'fa-IR',
+      description: riskSeoPage.description,
+      offers: { '@type': 'Offer', price: '0', priceCurrency: 'IRR' },
     } : null)
     setJsonLd('organization', {
       '@context': 'https://schema.org',

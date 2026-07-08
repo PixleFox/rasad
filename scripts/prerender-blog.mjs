@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { blogPosts } from '../src/data/blogPosts.js'
+import { riskSeoFaq, riskSeoKeywords, riskSeoPage, riskSeoSections } from '../src/data/riskSeo.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const root = path.resolve(__dirname, '..')
@@ -74,6 +75,18 @@ function faqJsonLd(post) {
   }
 }
 
+function faqListJsonLd(items) {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: items.map((item) => ({
+      '@type': 'Question',
+      name: item.question,
+      acceptedAnswer: { '@type': 'Answer', text: item.answer },
+    })),
+  }
+}
+
 function blogIndexBody() {
   return `
     <main dir="rtl">
@@ -106,6 +119,27 @@ function postBody(post) {
   `
 }
 
+function riskBody() {
+  return `
+    <main dir="rtl">
+      <h1>تست ریسک پذیری و آزمون ریسک سنجی سرمایه‌گذاری</h1>
+      <p>با تست ریسک پذیری رصد، میزان ریسک‌پذیری مالی خود را بسنجید، تیپ سرمایه‌گذاری‌تان را بشناسید و پیشنهاد صندوق متناسب با داده‌های روز دریافت کنید.</p>
+      <p>این صفحه برای عبارت‌های ${riskSeoKeywords.map(escapeHtml).join('، ')} طراحی شده است.</p>
+      ${riskSeoSections.map((section) => `
+        <section>
+          <h2>${escapeHtml(section.title)}</h2>
+          <p>${escapeHtml(section.body)}</p>
+        </section>
+      `).join('\n')}
+      <section>
+        <h2>پرسش‌های پرتکرار آزمون ریسک سنجی</h2>
+        ${riskSeoFaq.map((item) => `<h3>${escapeHtml(item.question)}</h3><p>${escapeHtml(item.answer)}</p>`).join('\n')}
+      </section>
+      <p><a href="/risk-assessment">شروع تست ریسک پذیری</a></p>
+    </main>
+  `
+}
+
 writePage('/blog', {
   title: 'وبلاگ رصد | راهنمای صندوق‌های سرمایه‌گذاری',
   description: 'آموزش و راهنمای انتخاب، مقایسه و رتبه‌بندی صندوق‌های سرمایه‌گذاری ایران با داده‌های رصد.',
@@ -134,4 +168,30 @@ for (const post of blogPosts) {
   })
 }
 
-console.log(`Prerendered ${blogPosts.length + 1} blog pages.`)
+const riskJsonLd = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'WebApplication',
+    name: 'تست ریسک پذیری رصد',
+    url: `${siteUrl}/risk-assessment`,
+    applicationCategory: 'FinanceApplication',
+    inLanguage: 'fa-IR',
+    description: riskSeoPage.description,
+    offers: { '@type': 'Offer', price: '0', priceCurrency: 'IRR' },
+  },
+  faqListJsonLd(riskSeoFaq),
+]
+
+for (const route of [riskSeoPage.canonicalPath, ...riskSeoPage.aliases]) {
+  writePage(route, {
+    title: riskSeoPage.title,
+    description: riskSeoPage.description,
+    canonical: `${siteUrl}${riskSeoPage.canonicalPath}`,
+    type: 'website',
+    keywords: riskSeoKeywords,
+    body: riskBody(),
+    jsonLd: riskJsonLd,
+  })
+}
+
+console.log(`Prerendered ${blogPosts.length + 1} blog pages and ${riskSeoPage.aliases.length + 1} risk pages.`)

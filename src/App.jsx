@@ -80,6 +80,9 @@ export default function App() {
           <Route path="/ranking" element={<Ranking />} />
           <Route path="/admin/leads" element={<AdminLeads />} />
           <Route path="/recommendation" element={<Recommendation />} />
+          <Route path="/risk-assessment" element={<Recommendation />} />
+          <Route path="/risk-test" element={<Recommendation />} />
+          <Route path="/risk-profile-test" element={<Recommendation />} />
         </Route>
       </Routes>
     </BrowserRouter>
