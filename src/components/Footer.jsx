@@ -19,6 +19,7 @@ const links = {
     { label: 'رتبه‌بندی صندوق‌ها', to: '/ranking' },
   ],
   'شرکت': [
+    { label: 'وبلاگ رصد', to: '/blog' },
     { label: 'درباره رصد', to: '/about' },
     { label: 'تماس با ما', to: '/about' },
   ],

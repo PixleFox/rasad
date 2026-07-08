@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
+import { getBlogPost } from '../data/blogPosts'
 
 const DEFAULT = {
   title: 'رصد | تحلیل و مقایسه صندوق‌های سرمایه‌گذاری',
@@ -25,6 +26,7 @@ const pages = {
   '/marketing': { title: 'تحلیل بازاریابی صندوق‌های سرمایه‌گذاری | رصد', description: 'تحلیل جریان پول، بازارگردانی و عملکرد بازاریابی صندوق‌های سرمایه‌گذاری.' },
   '/live-flow': { title: 'جریان زنده پول صندوق‌ها | رصد', description: 'رصد جریان ورود و خروج پول و معاملات صندوق‌های قابل معامله.' },
   '/recommendation': { title: 'آزمون ریسک‌پذیری و پیشنهاد صندوق | رصد', description: 'با آزمون رفتاری رصد، تیپ سرمایه‌گذاری خود را بشناسید و پیشنهاد صندوق دریافت کنید.' },
+  '/blog': { title: 'وبلاگ رصد | راهنمای صندوق‌های سرمایه‌گذاری', description: 'آموزش و راهنمای انتخاب، مقایسه و رتبه‌بندی صندوق‌های سرمایه‌گذاری ایران با داده‌های رصد.' },
   '/about': { title: 'درباره رصد | تحلیل صندوق‌های سرمایه‌گذاری', description: 'رصد، پلتفرم تحلیل داده و مقایسه صندوق‌های سرمایه‌گذاری ایران.' },
 }
 
@@ -34,11 +36,30 @@ function setMeta(selector, attributes) {
   Object.entries(attributes).forEach(([key, value]) => element.setAttribute(key, value))
 }
 
+function setJsonLd(id, data) {
+  let element = document.head.querySelector(`script[data-rasad-jsonld="${id}"]`)
+  if (!data) {
+    element?.remove()
+    return
+  }
+  if (!element) {
+    element = document.createElement('script')
+    element.type = 'application/ld+json'
+    element.setAttribute('data-rasad-jsonld', id)
+    document.head.appendChild(element)
+  }
+  element.textContent = JSON.stringify(data)
+}
+
 export default function Seo() {
   const { pathname } = useLocation()
   useEffect(() => {
     const managerPage = pathname.startsWith('/managers/')
-    const page = managerPage
+    const blogMatch = pathname.match(/^\/blog\/([^/]+)$/)
+    const blogPost = blogMatch ? getBlogPost(decodeURIComponent(blogMatch[1])) : null
+    const page = blogPost
+      ? { title: `${blogPost.title} | رصد`, description: blogPost.description }
+      : managerPage
       ? { title: 'اطلاعات مدیر صندوق | رصد', description: 'داشبورد دارایی، عملکرد و صندوق‌های تحت مدیریت نهاد مالی.' }
       : pages[pathname] || DEFAULT
     const canonicalUrl = `https://ra100.ir${pathname === '/' ? '/' : pathname.replace(/\/$/, '')}`
@@ -49,9 +70,40 @@ export default function Seo() {
     setMeta('meta[property="og:title"]', { property: 'og:title', content: page.title })
     setMeta('meta[property="og:description"]', { property: 'og:description', content: page.description })
     setMeta('meta[property="og:url"]', { property: 'og:url', content: canonicalUrl })
+    setMeta('meta[property="og:type"]', { property: 'og:type', content: blogPost ? 'article' : 'website' })
+    setMeta('meta[name="keywords"]', { name: 'keywords', content: blogPost ? blogPost.keywords.join('، ') : 'مقایسه صندوق سرمایه‌گذاری، صندوق درآمد ثابت، صندوق طلا، رتبه‌بندی صندوق‌ها، رصد' })
     let canonical = document.head.querySelector('link[rel="canonical"]')
     if (!canonical) { canonical = document.createElement('link'); canonical.rel = 'canonical'; document.head.appendChild(canonical) }
     canonical.href = canonicalUrl
+
+    setJsonLd('article', blogPost ? {
+      '@context': 'https://schema.org',
+      '@type': 'Article',
+      headline: blogPost.title,
+      description: blogPost.description,
+      datePublished: blogPost.publishedAt,
+      dateModified: blogPost.updatedAt,
+      inLanguage: 'fa-IR',
+      mainEntityOfPage: canonicalUrl,
+      author: { '@type': 'Organization', name: 'رصد' },
+      publisher: { '@type': 'Organization', name: 'رصد', url: 'https://ra100.ir' },
+    } : null)
+    setJsonLd('faq', blogPost ? {
+      '@context': 'https://schema.org',
+      '@type': 'FAQPage',
+      mainEntity: blogPost.faq.map((item) => ({
+        '@type': 'Question',
+        name: item.question,
+        acceptedAnswer: { '@type': 'Answer', text: item.answer },
+      })),
+    } : null)
+    setJsonLd('organization', {
+      '@context': 'https://schema.org',
+      '@type': 'Organization',
+      name: 'رصد',
+      url: 'https://ra100.ir',
+      description: 'رصد یک ابزار مقایسه صندوق‌های سرمایه‌گذاری در ایران است که داده‌های صندوق‌ها را برای تحلیل، رتبه‌بندی و تصمیم‌گیری شفاف‌تر نمایش می‌دهد.',
+    })
   }, [pathname])
   return null
 }

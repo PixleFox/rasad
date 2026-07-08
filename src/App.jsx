@@ -17,6 +17,8 @@ import ManagerDashboard from './pages/ManagerDashboard'
 import Marketing from './pages/Marketing'
 import Comparison from './pages/Comparison'
 import About from './pages/About'
+import Blog from './pages/Blog'
+import BlogPost from './pages/BlogPost'
 import Ranking from './pages/Ranking'
 import Triggers from './pages/Triggers'
 import LiveFlow from './pages/LiveFlow'
@@ -73,6 +75,8 @@ export default function App() {
           <Route path="/marketing" element={<Marketing />} />
           <Route path="/compare" element={<Comparison />} />
           <Route path="/about" element={<About />} />
+          <Route path="/blog" element={<Blog />} />
+          <Route path="/blog/:slug" element={<BlogPost />} />
           <Route path="/ranking" element={<Ranking />} />
           <Route path="/admin/leads" element={<AdminLeads />} />
           <Route path="/recommendation" element={<Recommendation />} />

@@ -39,6 +39,7 @@ const menuItems = [
   { label: 'سامانه مقایسه', to: '/compare', keywords: 'مقایسه compare' },
   { label: 'رتبه‌بندی صندوق‌ها', to: '/ranking', keywords: 'ranking رتبه بازدهی دارایی' },
   { label: 'مارکتینگ صندوق‌ها', to: '/marketing', keywords: 'marketing بازاریابی کیفیت تابلو' },
+  { label: 'وبلاگ', to: '/blog', keywords: 'مقاله آموزش صندوق سرمایه گذاری' },
   { label: 'درباره ما', to: '/about', keywords: 'about تماس' },
 ]
 
