@@ -76,7 +76,7 @@ const COL = {
   ytm: { key: 'ytm', label: 'YTM بازه', sortVal: (f) => f.ytmReturn, render: ytmCell, exportValue: (f) => f.ytmReturn },
   declaredRate: { key: 'declaredRate', label: 'نرخ اعلامی', sortVal: (f) => f.declaredRate, render: declaredRateCell, exportValue: (f) => f.declaredRate },
   years: { key: 'years', label: 'سابقه', sortVal: (f) => f.years, render: yearsCell, exportValue: (f) => f.years },
-  score: { key: 'score', label: 'شاخص رصد', sortVal: (f) => f.rasadScore, render: (f) => <ScorePill score={f.rasadScore} />, exportValue: (f) => f.rasadScore },
+  score: { key: 'score', label: 'شاخص رصد', sortVal: (f) => f.rasadScore, render: (f) => <ScorePill score={f.rasadScore} max={f.rasadScoreMax || 100} />, exportValue: (f) => f.rasadScore },
   site: { key: 'site', label: 'سایت', render: (f) => <SiteLink url={f.website} />, exportValue: (f) => f.website },
 }
 

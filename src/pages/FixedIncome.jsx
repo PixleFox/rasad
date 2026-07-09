@@ -1,10 +1,10 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import FundsPageLayout from '../components/FundsPageLayout'
 import FundsTable from '../components/FundsTable'
 import { fixedIncomeColumnParts } from '../components/fundColumns'
 import { useRangeFunds } from '../hooks/useRangeFunds'
-import { splitFixedIncome, enrichFunds, faNum, daysBetween } from '../lib/fipiran'
+import { splitFixedIncome, enrichFunds, fetchTsetmcQuality, computeBoardQualityScore, faNum, daysBetween } from '../lib/fipiran'
 import { fixedIncomeDeclaredRates } from '../data/fixedIncomeDeclaredRates'
 import FundSummary from '../components/FundSummary'
 
@@ -38,6 +38,82 @@ function findDeclaredRate(fund) {
 function annualizedYtm(rangeReturn, dayCount) {
   if (!Number.isFinite(rangeReturn) || !Number.isFinite(dayCount) || dayCount <= 0 || rangeReturn <= -100) return null
   return (Math.pow(1 + rangeReturn / 100, 365 / dayCount) - 1) * 100
+}
+
+function reserveScore(fund) {
+  const aumBT = fund.sizeRial > 0 ? fund.sizeRial / 1e10 : null
+  if (!Number.isFinite(fund.reserve) || !aumBT) return 0
+  const pct = (fund.reserve / aumBT) * 100
+  if (pct >= 30) return 10
+  if (pct >= 20) return 9
+  if (pct >= 10) return 8
+  if (pct >= 5) return 7
+  if (pct >= 1) return 6
+  if (pct >= 0) return 5
+  if (pct >= -1) return 4
+  if (pct >= -5) return 3
+  if (pct <= -10) return -3
+  return 0
+}
+
+function historyScore(years) {
+  if (!Number.isFinite(years)) return 0
+  if (years > 5) return 5
+  if (years >= 3) return 4
+  if (years >= 1) return 3
+  return 0
+}
+
+function aumScore(sizeRial) {
+  const hemat = Number(sizeRial) / 1e13
+  if (!Number.isFinite(hemat) || hemat <= 0) return 0
+  if (hemat > 50) return 10
+  if (hemat >= 20) return 9
+  if (hemat >= 10) return 8
+  if (hemat >= 5) return 7
+  if (hemat >= 1) return 6
+  if (hemat >= 0.5) return 5
+  if (hemat >= 0.1) return 4
+  return 3
+}
+
+function buildReturnScoreMap(rows) {
+  const ranked = rows
+    .filter((fund) => Number.isFinite(fund.ytmReturn))
+    .sort((a, b) => b.ytmReturn - a.ytmReturn)
+  const n = ranked.length
+  const scoreForRank = (rank) => {
+    if (rank <= Math.max(1, Math.ceil(n * 0.01))) return 10
+    if (rank <= Math.max(1, Math.ceil(n * 0.05))) return 9
+    if (rank <= Math.max(1, Math.ceil(n * 0.10))) return 8
+    if (rank <= Math.max(1, Math.ceil(n * 0.15))) return 7
+    if (rank <= Math.max(1, Math.ceil(n * 0.20))) return 6
+    if (rank <= Math.max(1, Math.ceil(n * 0.40))) return 5
+    if (rank <= Math.max(1, Math.ceil(n * 0.50))) return 4
+    if (rank <= Math.max(1, Math.ceil(n * 0.60))) return 3
+    if (rank <= Math.max(1, Math.ceil(n * 0.70))) return 2
+    if (rank <= Math.max(1, Math.ceil(n * 0.80))) return 1
+    return 0
+  }
+  return new Map(ranked.map((fund, index) => [fund.regNo, scoreForRank(index + 1)]))
+}
+
+function applyAccumulatingEtfScore(rows, qData) {
+  const returnScores = buildReturnScoreMap(rows)
+  return rows.map((fund) => {
+    const boardScore = computeBoardQualityScore(fund, qData[fund.insCode])?.total ?? 0
+    const reserve = reserveScore(fund)
+    const ytm = returnScores.get(fund.regNo) ?? 0
+    const history = historyScore(fund.years)
+    const aum = aumScore(fund.sizeRial)
+    const rasadScore = boardScore + reserve + ytm + history + aum
+    return {
+      ...fund,
+      rasadScore,
+      rasadScoreMax: 85,
+      rasadScoreParts: { board: boardScore, reserve, ytm, history, aum },
+    }
+  })
 }
 
 function buildColumns(tab) {
@@ -80,6 +156,45 @@ export default function FixedIncome() {
     marketPriceField: 'pDrCotVal',
   })
   const [tab, setTab] = useState('etfDividend')
+  const [qData, setQData] = useState({})
+  const [qLoading, setQLoading] = useState(false)
+
+  const accumulatingEtfs = useMemo(
+    () => funds.filter((fund) => fund.type === 4 && fund.isETF && fund.dividendDays <= 0 && fund.insCode),
+    [funds]
+  )
+
+  useEffect(() => {
+    if (!accumulatingEtfs.length) {
+      setQLoading(false)
+      return
+    }
+    let cancelled = false
+    setQLoading(true)
+    Promise.all(accumulatingEtfs.map(async (fund) => {
+      try {
+        return [fund.insCode, await fetchTsetmcQuality(fund.insCode)]
+      } catch {
+        return [fund.insCode, null]
+      }
+    }))
+      .then((pairs) => {
+        if (cancelled) return
+        setQData((prev) => {
+          const next = { ...prev }
+          pairs.forEach(([insCode, data]) => {
+            if (data) next[insCode] = data
+          })
+          return next
+        })
+      })
+      .finally(() => {
+        if (!cancelled) setQLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [accumulatingEtfs])
 
   const groups = useMemo(() => {
     const split = splitFixedIncome(funds)
@@ -93,17 +208,19 @@ export default function FixedIncome() {
         ytmReturn: annualizedYtm(fund.rangeReturn, dayCount),
       }
     })
+    const etfAccumulating = addDeclaredAndYtm(split.etfAccumulating)
     return {
       etfDividend:          addDeclaredAndYtm(split.etfDividend),
-      etfAccumulating:      addDeclaredAndYtm(split.etfAccumulating),
+      etfAccumulating:      applyAccumulatingEtfScore(etfAccumulating, qData),
       issuanceDividend:     addDeclaredAndYtm(split.issuanceDividend),
       issuanceAccumulating: addDeclaredAndYtm(split.issuanceAccumulating),
     }
-  }, [funds, startDate, endDate, startISO, endISO])
+  }, [funds, startDate, endDate, startISO, endISO, qData])
 
   const rows = groups[tab]
   const getTabCount = (id) => groups[id]?.length ?? 0
   const dividendTab = tab === 'etfDividend' || tab === 'issuanceDividend'
+  const activeLoading = loading || (tab === 'etfAccumulating' && qLoading)
   const columns = useMemo(() => buildColumns(tab), [tab])
 
   return (
@@ -113,7 +230,7 @@ export default function FixedIncome() {
       title="صندوق‌های"
       highlight="درآمد ثابت"
       subtitle="کم‌ریسک‌ترین دسته — مناسب حفظ ارزش سرمایه"
-      loading={loading}
+      loading={activeLoading}
       startDate={startDate}
       endDate={endDate}
       startISO={startISO}
@@ -151,13 +268,13 @@ export default function FixedIncome() {
       </motion.div>
 
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.1 }}>
-        <FundSummary rows={rows} loading={loading} showReturns={!dividendTab} returnKey="ytmReturn" returnLabel="YTM میانگین" />
+        <FundSummary rows={rows} loading={activeLoading} showReturns={!dividendTab} returnKey="ytmReturn" returnLabel="YTM میانگین" />
         <FundsTable
           columns={columns}
           rows={rows}
           defaultSortKey="score"
           minWidth={900}
-          loading={loading}
+          loading={activeLoading}
           error={error}
           onRetry={() => setStartISO((d) => d)}
           emptyText="صندوقی در این دسته یافت نشد."

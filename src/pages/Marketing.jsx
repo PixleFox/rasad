@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import FundsPageLayout from '../components/FundsPageLayout'
 import FundsTable from '../components/FundsTable'
 import { useRangeFunds } from '../hooks/useRangeFunds'
-import { computeMarketing, computeSegmentation, MARKETING_LEVELS, fetchTsetmcQuality, fetchCodalNews, faNum, fmtSize } from '../lib/fipiran'
+import { computeMarketing, computeSegmentation, MARKETING_LEVELS, fetchTsetmcQuality, fetchCodalNews, computeBoardQualityScore, faNum, fmtSize } from '../lib/fipiran'
 
 const TABS = [
   { id: 0,  label: 'همه صندوق‌ها' },
@@ -113,13 +113,8 @@ function BoardQualityTable({ funds, qData }) {
   function getFundScores(f) {
     const d = qData[f.insCode]
     if (!d) return null
-    const bubblePct = d.bubblePct
-    const mm     = scoreMM(d.mmVolBT, f.sizeRial)
-    const bubble = scoreBubble(bubblePct) ?? 0
-    const vol    = scoreVolume(d.avgMonthVol, f.sizeRial, f.navRet)
-    const chg    = scoreChangeRate(d.changePct)
-    const trd    = scoreTrades(d.avgDailyTrades, f.sizeRial)
-    return { d, bubblePct, mm, bubble, vol, chg, trd, total: mm + bubble + vol + chg + trd }
+    const scores = computeBoardQualityScore(f, d)
+    return scores ? { d, ...scores } : null
   }
 
   const sortedFunds = useMemo(() => {

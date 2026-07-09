@@ -215,6 +215,64 @@ export async function fetchTsetmcQuality(insCode) {
   }
 }
 
+export function scoreBoardMarketMaker(mmVolBT, sizeRial) {
+  if (!mmVolBT || !sizeRial || sizeRial <= 0) return 0
+  const aumBT = sizeRial / 1e10
+  const pct = (mmVolBT / aumBT) * 100
+  const steps = Math.max(0, Math.floor((25 - pct) / 5))
+  return Math.max(0, 15 - steps * 3)
+}
+
+export function scoreBoardBubble(pct) {
+  if (pct == null) return null
+  if (pct >= -0.1  && pct <= 0.1) return 10
+  if (pct >= -0.5  && pct < -0.1) return 9
+  if (pct >= -1.0  && pct < -0.5) return 8
+  if (pct >= -3.0  && pct < -1.0) return 6
+  if (pct < -3.0) return 5
+  if (pct > 0.1   && pct <= 0.5) return 7
+  if (pct > 0.5   && pct <= 1.0) return 4
+  if (pct > 1.0   && pct <= 3.0) return 3
+  return 0
+}
+
+export function scoreBoardVolume(avgMonthVol, sizeRial, navRet) {
+  if (!avgMonthVol || !sizeRial || !navRet || sizeRial <= 0 || navRet <= 0) return 0
+  const totalUnits = sizeRial / navRet
+  const volPct = (avgMonthVol / totalUnits) * 100
+  const steps = Math.max(0, Math.floor((0.3 - volPct) / 0.1))
+  return Math.max(0, 10 - steps * 4)
+}
+
+export function scoreBoardChangeRate(changePct) {
+  if (changePct == null) return 0
+  if (changePct >= 0.14) return 10
+  if (changePct >= 0.13) return 6
+  if (changePct >= 0.12) return 2
+  return 0
+}
+
+export function scoreBoardTrades(avgDailyTrades, sizeRial) {
+  if (!avgDailyTrades || !sizeRial || sizeRial <= 0) return 0
+  const aumBT = sizeRial / 1e10
+  const ideal = aumBT * 0.20
+  if (ideal <= 0) return 0
+  const ratio = avgDailyTrades / ideal
+  const steps = Math.max(0, Math.floor((1 - ratio) / 0.05))
+  return Math.max(0, 5 - steps)
+}
+
+export function computeBoardQualityScore(fund, tsetmcQuality) {
+  if (!fund || !tsetmcQuality) return null
+  const bubblePct = tsetmcQuality.bubblePct
+  const mm = scoreBoardMarketMaker(tsetmcQuality.mmVolBT, fund.sizeRial)
+  const bubble = scoreBoardBubble(bubblePct) ?? 0
+  const vol = scoreBoardVolume(tsetmcQuality.avgMonthVol, fund.sizeRial, fund.navRet)
+  const chg = scoreBoardChangeRate(tsetmcQuality.changePct)
+  const trd = scoreBoardTrades(tsetmcQuality.avgDailyTrades, fund.sizeRial)
+  return { bubblePct, mm, bubble, vol, chg, trd, total: mm + bubble + vol + chg + trd }
+}
+
 async function fetchTsetmcDailyList(insCode, count = 90) {
   const payload = await _fetchTsetmc(`ClosingPrice/GetClosingPriceDailyList/${insCode}/${count}`)
   return Array.isArray(payload.closingPriceDaily) ? payload.closingPriceDaily : []

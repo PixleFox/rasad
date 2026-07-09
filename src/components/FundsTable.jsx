@@ -294,11 +294,12 @@ function RankCell({ rank, medal }) {
   )
 }
 
-export function ScorePill({ score }) {
-  const color = score >= 80 ? '#00FF9D' : score >= 60 ? '#00D4FF' : score >= 40 ? '#FBBF24' : '#FF3B6B'
+export function ScorePill({ score, max = 100 }) {
+  const ratio = max > 0 ? (Number(score) / max) * 100 : Number(score)
+  const color = ratio >= 80 ? '#00FF9D' : ratio >= 60 ? '#00D4FF' : ratio >= 40 ? '#FBBF24' : '#FF3B6B'
   return (
     <span
-      className="inline-flex items-center justify-center w-10 h-8 rounded-lg text-sm font-dana tabular-nums"
+      className="inline-flex min-w-10 h-8 items-center justify-center rounded-lg px-2 text-sm font-dana tabular-nums"
       style={{
         fontWeight: 900,
         color,
@@ -308,6 +309,7 @@ export function ScorePill({ score }) {
       }}
     >
       {Number(score).toLocaleString('fa-IR')}
+      {max !== 100 && <span className="mr-1 text-[0.55rem] opacity-70">/ {Number(max).toLocaleString('fa-IR')}</span>}
     </span>
   )
 }
