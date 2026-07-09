@@ -81,18 +81,13 @@ function buildReturnScoreMap(rows) {
   const validRows = rows
     .filter((fund) => Number.isFinite(fund.ytmReturn))
     .sort((a, b) => b.ytmReturn - a.ytmReturn)
-  const n = validRows.length
-  if (!n) return new Map()
-  const lowerIndex = Math.min(n - 1, Math.floor(n * 0.95))
-  const upperIndex = Math.min(n - 1, Math.floor(n * 0.05))
-  const floorYtm = validRows[lowerIndex].ytmReturn
-  const ceilingYtm = validRows[upperIndex].ytmReturn
-  const span = ceilingYtm - floorYtm
+  const bestYtm = validRows[0]?.ytmReturn
   const scoreForYtm = (ytmReturn) => {
     if (!Number.isFinite(ytmReturn)) return 0
-    if (span <= 0) return 10
-    const clamped = Math.max(floorYtm, Math.min(ceilingYtm, ytmReturn))
-    return Math.round(((clamped - floorYtm) / span) * 20)
+    const gapFromBest = Math.max(0, bestYtm - ytmReturn)
+    if (gapFromBest >= 6) return 0
+    const strength = Math.max(0, 1 - gapFromBest / 6)
+    return Math.round(35 * Math.pow(strength, 1.6))
   }
   return new Map(validRows.map((fund) => [fund.regNo, scoreForYtm(fund.ytmReturn)]))
 }
@@ -109,7 +104,7 @@ function applyAccumulatingEtfScore(rows, qData) {
     return {
       ...fund,
       rasadScore,
-      rasadScoreMax: 95,
+      rasadScoreMax: 110,
       rasadScoreParts: { board: boardScore, reserve, ytm, history, aum },
     }
   })
