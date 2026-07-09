@@ -45,7 +45,21 @@ const percentCell = (value) => {
   )
 }
 const returnCell = (f) => percentCell(f.rangeReturn)
-const ytmCell = (f) => percentCell(f.ytmReturn)
+const scoreHint = (score, max, label = 'نمره') => {
+  if (!Number.isFinite(score)) return null
+  const color = score < 0 ? '#FF3B6B' : '#00D4FF'
+  return (
+    <span className="mt-1 block text-[0.58rem] font-dana tabular-nums" style={{ fontWeight: 800, color }}>
+      {label}: {faNum(score)}{max ? `/${faNum(max)}` : ''}
+    </span>
+  )
+}
+const ytmCell = (f) => (
+  <div className="flex flex-col items-center">
+    {percentCell(f.ytmReturn)}
+    {scoreHint(f.rasadScoreParts?.ytm, 25)}
+  </div>
+)
 const declaredRateCell = (f) => (
   Number.isFinite(f.declaredRate) ? (
     <span className="text-sm font-dana tabular-nums text-neon-green" style={{ fontWeight: 900 }}>
@@ -57,16 +71,35 @@ const declaredRateCell = (f) => (
 )
 
 const sizeCell = (f) => (
-  <span className="text-text-primary text-sm font-dana tabular-nums" style={{ fontWeight: 600 }}>
-    {fmtSize(f.sizeRial)}
-  </span>
+  <div className="flex flex-col items-center">
+    <span className="text-text-primary text-sm font-dana tabular-nums" style={{ fontWeight: 600 }}>
+      {fmtSize(f.sizeRial)}
+    </span>
+    {scoreHint(f.rasadScoreParts?.aum, 15)}
+  </div>
 )
 
 const yearsCell = (f) => (
-  <span className="text-text-primary text-sm font-dana tabular-nums" style={{ fontWeight: 600 }}>
-    {f.years != null ? faNum(f.years.toFixed(1)) : '—'}
-  </span>
+  <div className="flex flex-col items-center">
+    <span className="text-text-primary text-sm font-dana tabular-nums" style={{ fontWeight: 600 }}>
+      {f.years != null ? faNum(f.years.toFixed(1)) : '—'}
+    </span>
+    {scoreHint(f.rasadScoreParts?.history, 5)}
+  </div>
 )
+const scoreCell = (f) => {
+  const p = f.rasadScoreParts
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <ScorePill score={f.rasadScore} max={f.rasadScoreMax || 100} />
+      {p && (
+        <span className="max-w-[150px] text-center text-[0.55rem] leading-4 text-text-muted font-dana tabular-nums" style={{ fontWeight: 700 }}>
+          تابلو {faNum(p.board)}/۳۵ · YTM {faNum(p.ytm)}/۲۵ · AUM {faNum(p.aum)}/۱۵ · ذخیره {faNum(p.reserve)}/۱۰ · جریمه {faNum(p.reservePenalty)}
+        </span>
+      )}
+    </div>
+  )
+}
 
 const COL = {
   name: { key: 'name', label: 'نام صندوق', align: 'start', render: nameCell, exportValue: (f) => f.name },
@@ -76,7 +109,7 @@ const COL = {
   ytm: { key: 'ytm', label: 'YTM بازه', sortVal: (f) => f.ytmReturn, render: ytmCell, exportValue: (f) => f.ytmReturn },
   declaredRate: { key: 'declaredRate', label: 'نرخ اعلامی', sortVal: (f) => f.declaredRate, render: declaredRateCell, exportValue: (f) => f.declaredRate },
   years: { key: 'years', label: 'سابقه', sortVal: (f) => f.years, render: yearsCell, exportValue: (f) => f.years },
-  score: { key: 'score', label: 'شاخص رصد', sortVal: (f) => f.rasadScore, render: (f) => <ScorePill score={f.rasadScore} max={f.rasadScoreMax || 100} />, exportValue: (f) => f.rasadScore },
+  score: { key: 'score', label: 'شاخص رصد', sortVal: (f) => f.rasadScore, render: scoreCell, exportValue: (f) => f.rasadScore },
   site: { key: 'site', label: 'سایت', render: (f) => <SiteLink url={f.website} />, exportValue: (f) => f.website },
 }
 

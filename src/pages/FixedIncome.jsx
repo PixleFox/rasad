@@ -139,12 +139,24 @@ function buildColumns(tab) {
       exportValue: (f) => f.reserve,
       render: (f) =>
         f.reserve != null ? (
-          <span
-            className="text-sm font-dana tabular-nums"
-            style={{ fontWeight: 700, color: f.reserve >= 0 ? '#00FF9D' : '#FF3B6B' }}
-          >
-            {(f.reserve >= 0 ? '+' : '−') + faNum(Math.abs(Math.round(f.reserve)))}
-          </span>
+          <div className="flex flex-col items-center">
+            <span
+              className="text-sm font-dana tabular-nums"
+              style={{ fontWeight: 700, color: f.reserve >= 0 ? '#00FF9D' : '#FF3B6B' }}
+            >
+              {(f.reserve >= 0 ? '+' : '−') + faNum(Math.abs(Math.round(f.reserve)))}
+            </span>
+            {Number.isFinite(f.rasadScoreParts?.reserve) && (
+              <span className="mt-1 text-[0.58rem] font-dana tabular-nums text-neon-cyan" style={{ fontWeight: 800 }}>
+                نمره: {faNum(f.rasadScoreParts.reserve)}/۱۰
+              </span>
+            )}
+            {Number.isFinite(f.rasadScoreParts?.reservePenalty) && f.rasadScoreParts.reservePenalty < 0 && (
+              <span className="text-[0.58rem] font-dana tabular-nums text-[#FF3B6B]" style={{ fontWeight: 800 }}>
+                جریمه: {faNum(f.rasadScoreParts.reservePenalty)}
+              </span>
+            )}
+          </div>
         ) : (
           <span className="text-text-muted/40 text-xs">—</span>
         ),
