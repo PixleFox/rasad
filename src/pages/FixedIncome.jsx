@@ -74,14 +74,18 @@ function buildColumns(tab) {
 }
 
 export default function FixedIncome() {
-  const { funds, startDate, endDate, loading, error, startISO, endISO, setStartISO, setEndISO } = useRangeFunds()
+  const { funds, startDate, endDate, loading, error, startISO, endISO, setStartISO, setEndISO } = useRangeFunds({
+    useEtfMarketReturns: true,
+    etfMarketTypes: [4],
+    marketPriceField: 'pDrCotVal',
+  })
   const [tab, setTab] = useState('etfDividend')
 
   const groups = useMemo(() => {
     const split = splitFixedIncome(funds)
-    const dayCount = daysBetween(startDate || startISO, endDate || endISO)
     const addDeclaredAndYtm = (rows) => enrichFunds(rows, endDate || endISO).map((fund) => {
       const declared = findDeclaredRate(fund)
+      const dayCount = fund.rangeDayCount || daysBetween(startDate || startISO, endDate || endISO)
       return {
         ...fund,
         declaredRate: declared?.declaredRate ?? null,
@@ -164,7 +168,7 @@ export default function FixedIncome() {
       </motion.div>
 
       <p className="text-center text-text-muted text-xs font-dana mt-5 leading-relaxed" style={{ fontWeight: 600 }}>
-        منبع: فیپیران و فایل دستی نرخ اعلامی · YTM بازه برای صندوق‌های بدون تقسیم سود از بازده واقعی بازه و تعداد روزهای واقعی سالانه‌سازی می‌شود · ذخیره صندوق = (قیمت آماری − قیمت ابطال) × تعداد واحد
+        منبع: فیپیران، TSETMC و فایل دستی نرخ اعلامی · بازده ETFها از آخرین قیمت معامله تاریخی بازار و بازده صندوق‌های صدور/ابطالی از NAV ابطال محاسبه می‌شود · ذخیره صندوق = (قیمت آماری − قیمت ابطال) × تعداد واحد
       </p>
     </FundsPageLayout>
   )

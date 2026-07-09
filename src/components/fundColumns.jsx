@@ -14,6 +14,11 @@ const nameCell = (f) => (
         ⚠ داده {toJalali(f.staleDate)}
       </span>
     )}
+    {f.rangeSource === 'market' && (f.marketReturnStartDate || f.marketReturnEndDate) && (
+      <span className="text-[0.58rem] text-neon-cyan font-dana" style={{ fontWeight: 700 }}>
+        قیمت بازار {toJalali(f.marketReturnStartDate)} تا {toJalali(f.marketReturnEndDate)}
+      </span>
+    )}
   </div>
 )
 

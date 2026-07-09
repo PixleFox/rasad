@@ -87,6 +87,12 @@ export const daysBetween = (isoA, isoB) => {
   return Math.round(Math.abs(b - a) / 86400000)
 }
 
+const isoToTseDate = (iso) => Number(String(iso || '').replaceAll('-', ''))
+const tseDateToISO = (date) => {
+  const value = String(date || '')
+  return value.length === 8 ? `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}` : null
+}
+
 // ── Normalization ────────────────────────────────────────────────────────────
 function normalize(it) {
   // صندوق‌های ضمان و گارانتی → دسته مختلط (type 7)
@@ -209,6 +215,57 @@ export async function fetchTsetmcQuality(insCode) {
   }
 }
 
+async function fetchTsetmcDailyList(insCode, count = 90) {
+  const payload = await _fetchTsetmc(`ClosingPrice/GetClosingPriceDailyList/${insCode}/${count}`)
+  return Array.isArray(payload.closingPriceDaily) ? payload.closingPriceDaily : []
+}
+
+const pickDailyOnOrBefore = (dailyList, iso, priceField) => {
+  const target = isoToTseDate(iso)
+  if (!Number.isFinite(target)) return null
+  return dailyList
+    .filter((row) => row?.dEven <= target && Number(row?.[priceField]) > 0)
+    .sort((a, b) => b.dEven - a.dEven)[0] || null
+}
+
+async function mapWithConcurrency(items, limit, mapper) {
+  const out = new Array(items.length)
+  let cursor = 0
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (cursor < items.length) {
+      const index = cursor
+      cursor += 1
+      out[index] = await mapper(items[index], index)
+    }
+  })
+  await Promise.all(workers)
+  return out
+}
+
+async function fetchEtfMarketRangeReturn(fund, startISO, endISO, priceField) {
+  if (!fund?.insCode) return null
+  const count = Math.min(500, Math.max(60, daysBetween(startISO, endISO) + 35))
+  const dailyList = await fetchTsetmcDailyList(fund.insCode, count)
+  const startRow = pickDailyOnOrBefore(dailyList, startISO, priceField)
+  const endRow = pickDailyOnOrBefore(dailyList, endISO, priceField)
+  const startPrice = Number(startRow?.[priceField])
+  const endPrice = Number(endRow?.[priceField])
+  const marketStartDate = tseDateToISO(startRow?.dEven)
+  const marketEndDate = tseDateToISO(endRow?.dEven)
+  const dayCount = marketStartDate && marketEndDate ? daysBetween(marketStartDate, marketEndDate) : null
+  if (!(startPrice > 0) || !(endPrice > 0) || !dayCount) return null
+  return {
+    rangeReturn: (endPrice / startPrice - 1) * 100,
+    rangeSource: 'market',
+    rangePriceField: priceField,
+    marketStartPrice: startPrice,
+    marketEndPrice: endPrice,
+    marketReturnStartDate: marketStartDate,
+    marketReturnEndDate: marketEndDate,
+    rangeDayCount: dayCount,
+  }
+}
+
 // ETF premium/discount based exclusively on TSETMC's last trade and redemption NAV.
 export const calculateMarketBubble = (lastTrade, redemptionNav) =>
   Number.isFinite(Number(lastTrade)) && Number(lastTrade) > 0 &&
@@ -276,7 +333,12 @@ export function fetchFundCompare(startDate) {
 // NAV between the two daily snapshots. Returns the END snapshot's funds (for
 // name/symbol/size/type) enriched with `rangeReturn` (percent).
 // Both snapshots are already completed by fetchFundCompare's mandatory union.
-export async function fetchRangeReturns(startISO, endISO) {
+export async function fetchRangeReturns(startISO, endISO, options = {}) {
+  const {
+    useEtfMarketReturns = false,
+    etfMarketTypes = null,
+    marketPriceField = 'pDrCotVal',
+  } = options
   // Fetch both endpoints in parallel
   const [endSnap, startSnap] = await Promise.all([
     fetchFundCompare(endISO),
@@ -292,18 +354,38 @@ export async function fetchRangeReturns(startISO, endISO) {
     return {
       ...f,
       rangeReturn,
+      rangeSource: 'nav',
+      rangeDayCount: daysBetween(startSnap.date, endSnap.date),
       unitsStart: s ? s.units : null,
       startDataDate: s?.dataDate ?? null,
       startDataStale: Boolean(s?.stale),
     }
   })
 
+  let outFunds = funds
+  if (useEtfMarketReturns) {
+    const allowedTypes = Array.isArray(etfMarketTypes) ? new Set(etfMarketTypes) : null
+    const marketCandidates = funds.filter((fund) =>
+      fund.isETF &&
+      fund.insCode &&
+      (!allowedTypes || allowedTypes.has(fund.type))
+    )
+    const marketByRegNo = new Map()
+    await mapWithConcurrency(marketCandidates, 6, async (fund) => {
+      try {
+        const market = await fetchEtfMarketRangeReturn(fund, startISO, endISO, marketPriceField)
+        if (market) marketByRegNo.set(fund.regNo, market)
+      } catch {}
+    })
+    outFunds = funds.map((fund) => marketByRegNo.has(fund.regNo) ? { ...fund, ...marketByRegNo.get(fund.regNo) } : fund)
+  }
+
   return {
     startDate: startSnap.date,
     endDate: endSnap.date,
-    staleFundsCount: funds.filter((fund) => fund.stale).length,
+    staleFundsCount: outFunds.filter((fund) => fund.stale).length,
     staleDate: null,
-    funds,
+    funds: outFunds,
   }
 }
 

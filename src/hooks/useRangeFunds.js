@@ -3,7 +3,13 @@ import { fetchRangeReturns, todayISO, monthsBeforeISO } from '../lib/fipiran'
 
 // Shared loader for the range-based fund pages: fetches the [start, end]
 // snapshot pair and exposes the enriched END funds plus range state.
-export function useRangeFunds() {
+export function useRangeFunds(options = {}) {
+  const {
+    useEtfMarketReturns = false,
+    etfMarketTypes = null,
+    marketPriceField = 'pDrCotVal',
+  } = options
+  const etfMarketTypesKey = Array.isArray(etfMarketTypes) ? etfMarketTypes.join(',') : ''
   const [startISO, setStartISO] = useState(() => monthsBeforeISO(todayISO(), 1))
   const [endISO, setEndISO] = useState(() => todayISO())
   const [funds, setFunds] = useState([])
@@ -16,7 +22,11 @@ export function useRangeFunds() {
     let cancelled = false
     setLoading(true)
     setError(null)
-    fetchRangeReturns(startISO, endISO)
+    fetchRangeReturns(startISO, endISO, {
+      useEtfMarketReturns,
+      etfMarketTypes,
+      marketPriceField,
+    })
       .then((res) => {
         if (cancelled) return
         setFunds(res.funds)
@@ -32,7 +42,7 @@ export function useRangeFunds() {
     return () => {
       cancelled = true
     }
-  }, [startISO, endISO])
+  }, [startISO, endISO, useEtfMarketReturns, etfMarketTypesKey, marketPriceField])
 
   return { funds, startDate, endDate, loading, error, startISO, endISO, setStartISO, setEndISO }
 }
