@@ -10,6 +10,8 @@ const dist = path.join(root, 'dist')
 const indexPath = path.join(dist, 'index.html')
 const baseHtml = fs.readFileSync(indexPath, 'utf8')
 const siteUrl = 'https://ra100.ir'
+const brandTitle = 'رصد | سایت رصد برای تحلیل و مقایسه صندوق‌های سرمایه‌گذاری'
+const brandDescription = 'سایت رصد ابزار فارسی تحلیل، رتبه‌بندی و مقایسه صندوق‌های سرمایه‌گذاری ایران با داده‌های به‌روز و شاخص اختصاصی رصد است.'
 
 function escapeHtml(value = '') {
   return String(value)
@@ -40,6 +42,7 @@ function writePage(route, { title, description, canonical, type = 'website', key
     .replace(/<meta name="description" content="[\s\S]*?" \/>/, '')
     .replace(/<meta property="og:type" content="[\s\S]*?" \/>/, '')
     .replace(/<link rel="canonical" href="[\s\S]*?" \/>/, '')
+    .replace(/<script type="application\/ld\+json">[\s\S]*?<\/script>/g, '')
 
   const html = cleanHtml
     .replace(/<title>[\s\S]*?<\/title>/, metadata)
@@ -86,6 +89,98 @@ function faqListJsonLd(items) {
     })),
   }
 }
+
+function organizationJsonLd() {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'Organization',
+    '@id': `${siteUrl}/#organization`,
+    name: 'رصد',
+    alternateName: ['سایت رصد', 'Rasad', 'ra100'],
+    url: siteUrl,
+    logo: `${siteUrl}/favicon.png`,
+    description: 'رصد یا سایت رصد یک پلتفرم فارسی برای تحلیل، رتبه‌بندی و مقایسه صندوق‌های سرمایه‌گذاری ایران است.',
+  }
+}
+
+function websiteJsonLd() {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    '@id': `${siteUrl}/#website`,
+    name: 'رصد',
+    alternateName: ['سایت رصد', 'Rasad'],
+    url: siteUrl,
+    inLanguage: 'fa-IR',
+    publisher: { '@id': `${siteUrl}/#organization` },
+  }
+}
+
+function homeBody() {
+  return `
+    <main dir="rtl">
+      <h1>سایت رصد؛ ابزار تحلیل و مقایسه صندوق‌های سرمایه‌گذاری ایران</h1>
+      <p>رصد یک سایت فارسی برای تحلیل، رتبه‌بندی و مقایسه صندوق‌های سرمایه‌گذاری ایران است. سایت رصد داده‌های صندوق‌ها را از نظر بازدهی، دارایی تحت مدیریت، ریسک، جریان پول و شاخص‌های تحلیلی کنار هم قرار می‌دهد تا تصمیم‌گیری شفاف‌تر شود.</p>
+      <section>
+        <h2>رصد چه کمکی می‌کند؟</h2>
+        <ul>
+          <li>مقایسه صندوق‌های درآمد ثابت، سهامی، مختلط، طلا، اهرمی، شاخصی، بخشی، جسورانه و بازارگردانی</li>
+          <li>رتبه‌بندی صندوق‌ها بر اساس داده‌های قابل مقایسه</li>
+          <li>نمایش اطلاعات تجمیعی بازار صندوق‌های سرمایه‌گذاری</li>
+          <li>بررسی مدیران صندوق‌ها و ابزارهای تحلیلی مرتبط با بازاریابی صندوق‌ها</li>
+          <li>تست ریسک پذیری و پیشنهاد صندوق متناسب با تیپ سرمایه‌گذار</li>
+        </ul>
+      </section>
+      <section>
+        <h2>صفحه‌های مهم سایت رصد</h2>
+        <ul>
+          <li><a href="/compare">مقایسه صندوق‌های سرمایه‌گذاری</a></li>
+          <li><a href="/ranking">رتبه‌بندی صندوق‌ها</a></li>
+          <li><a href="/funds/fixed-income">صندوق‌های درآمد ثابت</a></li>
+          <li><a href="/funds/commodity">صندوق‌های طلا و کالایی</a></li>
+          <li><a href="/risk-assessment">تست ریسک پذیری رصد</a></li>
+          <li><a href="/about">درباره سایت رصد</a></li>
+        </ul>
+      </section>
+    </main>
+  `
+}
+
+function aboutBody() {
+  return `
+    <main dir="rtl">
+      <h1>سایت رصد چیست؟</h1>
+      <p>سایت رصد در نشانی ${siteUrl} یک پلتفرم داده‌محور برای تحلیل و مقایسه صندوق‌های سرمایه‌گذاری ایران است. رصد خودش صندوق سرمایه‌گذاری نیست؛ نقش آن نمایش، تحلیل، رتبه‌بندی و مقایسه داده‌های صندوق‌ها برای تصمیم‌گیری شفاف‌تر است.</p>
+      <section>
+        <h2>رصد برای چه کسانی ساخته شده است؟</h2>
+        <p>رصد برای سرمایه‌گذاران، مدیران صندوق، تیم‌های بازاریابی صندوق‌ها و افرادی ساخته شده که می‌خواهند صندوق‌های سرمایه‌گذاری ایران را با داده‌های منظم‌تر بررسی کنند.</p>
+      </section>
+      <section>
+        <h2>رصد چه داده‌هایی را نمایش می‌دهد؟</h2>
+        <p>در سایت رصد می‌توان اطلاعاتی مانند بازدهی، دارایی تحت مدیریت، گروه صندوق، جریان پول، داده‌های مقایسه‌ای و شاخص‌های تحلیلی صندوق‌ها را بررسی کرد.</p>
+      </section>
+      <section>
+        <h2>نام‌های مرتبط با رصد</h2>
+        <p>این سرویس با نام‌های رصد، سایت رصد، Rasad و ra100 شناخته می‌شود. دامنه رسمی رصد ${siteUrl} است.</p>
+      </section>
+    </main>
+  `
+}
+
+const brandFaq = [
+  {
+    question: 'سایت رصد چیست؟',
+    answer: 'سایت رصد یک پلتفرم فارسی برای تحلیل، رتبه‌بندی و مقایسه صندوق‌های سرمایه‌گذاری ایران است.',
+  },
+  {
+    question: 'آدرس رسمی سایت رصد چیست؟',
+    answer: 'آدرس رسمی سایت رصد https://ra100.ir/ است.',
+  },
+  {
+    question: 'آیا رصد خودش صندوق سرمایه‌گذاری است؟',
+    answer: 'خیر. رصد صندوق سرمایه‌گذاری نیست و داده‌های صندوق‌ها را برای تحلیل، مقایسه و تصمیم‌گیری شفاف‌تر نمایش می‌دهد.',
+  },
+]
 
 function blogIndexBody() {
   return `
@@ -139,6 +234,24 @@ function riskBody() {
     </main>
   `
 }
+
+writePage('/', {
+  title: brandTitle,
+  description: brandDescription,
+  canonical: `${siteUrl}/`,
+  keywords: ['سایت رصد', 'رصد', 'Rasad', 'مقایسه صندوق سرمایه گذاری', 'رتبه بندی صندوق‌ها'],
+  body: homeBody(),
+  jsonLd: [organizationJsonLd(), websiteJsonLd(), faqListJsonLd(brandFaq)],
+})
+
+writePage('/about', {
+  title: 'سایت رصد چیست؟ | درباره رصد',
+  description: 'درباره سایت رصد؛ پلتفرم فارسی تحلیل، رتبه‌بندی و مقایسه صندوق‌های سرمایه‌گذاری ایران در نشانی ra100.ir.',
+  canonical: `${siteUrl}/about`,
+  keywords: ['سایت رصد چیست', 'درباره رصد', 'رصد چیست', 'Rasad'],
+  body: aboutBody(),
+  jsonLd: [organizationJsonLd(), faqListJsonLd(brandFaq)],
+})
 
 writePage('/blog', {
   title: 'وبلاگ رصد | راهنمای صندوق‌های سرمایه‌گذاری',
@@ -194,4 +307,4 @@ for (const route of [riskSeoPage.canonicalPath, ...riskSeoPage.aliases]) {
   })
 }
 
-console.log(`Prerendered ${blogPosts.length + 1} blog pages and ${riskSeoPage.aliases.length + 1} risk pages.`)
+console.log(`Prerendered 2 brand pages, ${blogPosts.length + 1} blog pages and ${riskSeoPage.aliases.length + 1} risk pages.`)
