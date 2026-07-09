@@ -42,12 +42,15 @@ export default function Footer() {
         <motion.div initial={{ opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="grid grid-cols-1 gap-6 md:grid-cols-5 md:gap-10">
           <div className="md:col-span-2">
             <div className="mb-3 flex items-center gap-2">
-              <img src="/assets/Logo.png" alt="" className="h-8 w-auto object-contain" />
+              <img src="/assets/Logo.png" alt="لوگوی سایت رصد" className="h-8 w-auto object-contain" />
               <span className="text-xl text-white" style={{ fontWeight: 900 }}>رصد</span>
             </div>
             <p className="mb-4 max-w-sm text-xs leading-6 text-text-muted sm:mb-6 sm:max-w-xs sm:text-sm" style={{ fontWeight: 600 }}>
-              پلتفرم جامع تحلیل و مقایسه صندوق‌های سرمایه‌گذاری ایران؛ داده‌های شفاف برای تصمیم‌های بهتر.
+              سایت رصد، پلتفرم فارسی تحلیل و مقایسه صندوق‌های سرمایه‌گذاری ایران؛ داده‌های شفاف برای تصمیم‌های بهتر.
             </p>
+            <Link to="/" className="mb-4 inline-flex text-xs text-neon-cyan transition-colors hover:text-white sm:mb-6" style={{ fontWeight: 800 }}>
+              ورود به سایت رصد
+            </Link>
             <div className="flex gap-2">
               {socials.map(({ label, icon: Icon }) => (
                 <a key={label} href="#" aria-label={label} className="grid h-9 w-9 place-items-center rounded-lg border border-neon-cyan/10 bg-surface/60 text-text-muted transition-colors hover:border-neon-cyan/40 hover:text-neon-cyan">

@@ -4,8 +4,8 @@ import { getBlogPost } from '../data/blogPosts'
 import { riskSeoFaq, riskSeoKeywords, riskSeoPage } from '../data/riskSeo'
 
 const DEFAULT = {
-  title: 'رصد | تحلیل و مقایسه صندوق‌های سرمایه‌گذاری',
-  description: 'تحلیل، رتبه‌بندی و مقایسه صندوق‌های سرمایه‌گذاری ایران با داده‌های به‌روز و شاخص اختصاصی رصد.',
+  title: 'رصد | سایت رصد برای تحلیل و مقایسه صندوق‌های سرمایه‌گذاری',
+  description: 'سایت رصد ابزار فارسی تحلیل، رتبه‌بندی و مقایسه صندوق‌های سرمایه‌گذاری ایران با داده‌های به‌روز و شاخص اختصاصی رصد است.',
 }
 
 const pages = {
@@ -116,9 +116,22 @@ export default function Seo() {
     setJsonLd('organization', {
       '@context': 'https://schema.org',
       '@type': 'Organization',
+      '@id': 'https://ra100.ir/#organization',
       name: 'رصد',
+      alternateName: ['سایت رصد', 'Rasad', 'ra100'],
       url: 'https://ra100.ir',
-      description: 'رصد یک ابزار مقایسه صندوق‌های سرمایه‌گذاری در ایران است که داده‌های صندوق‌ها را برای تحلیل، رتبه‌بندی و تصمیم‌گیری شفاف‌تر نمایش می‌دهد.',
+      logo: 'https://ra100.ir/favicon.png',
+      description: 'رصد یا سایت رصد یک پلتفرم فارسی برای تحلیل، رتبه‌بندی و مقایسه صندوق‌های سرمایه‌گذاری ایران است که داده‌های صندوق‌ها را برای تصمیم‌گیری شفاف‌تر نمایش می‌دهد.',
+    })
+    setJsonLd('website', {
+      '@context': 'https://schema.org',
+      '@type': 'WebSite',
+      '@id': 'https://ra100.ir/#website',
+      name: 'رصد',
+      alternateName: ['سایت رصد', 'Rasad'],
+      url: 'https://ra100.ir',
+      inLanguage: 'fa-IR',
+      publisher: { '@id': 'https://ra100.ir/#organization' },
     })
   }, [pathname])
   return null

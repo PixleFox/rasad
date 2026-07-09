@@ -150,8 +150,8 @@ export default function Hero() {
           className="text-white/75 text-sm sm:text-base lg:text-lg max-w-xl mx-auto mb-9 leading-relaxed font-dana"
           style={{ fontWeight: 600, textShadow: '0 1px 12px rgba(5,8,15,0.9)' }}
         >
-          جامع‌ترین پایگاه داده صندوق‌های سرمایه‌گذاری ایران. تحلیل لحظه‌ای، مقایسه هوشمند
-          و اطلاعات شفاف برای تصمیم‌های بهتر.
+          سایت رصد، پایگاه داده و ابزار تحلیل صندوق‌های سرمایه‌گذاری ایران است؛
+          مقایسه هوشمند، رتبه‌بندی و اطلاعات شفاف برای تصمیم‌های بهتر.
         </motion.p>
 
         {/* CTAs */}
