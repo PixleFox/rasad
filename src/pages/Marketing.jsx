@@ -96,12 +96,12 @@ function ScoreCell({ score, max, value, unit }) {
 }
 
 function TotalScoreBadge({ score }) {
-  const max = 45
+  const max = 35
   const { bg, text } = cellColor(score, max)
   return (
     <div className="flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl" style={{ background: bg, border: `1px solid ${text}40` }}>
       <span className="text-base font-dana tabular-nums" style={{ fontWeight: 900, color: text }}>{faNum(score)}</span>
-      <span className="text-[0.6rem] font-dana text-text-muted/60" style={{ fontWeight: 600 }}>از ۴۵</span>
+      <span className="text-[0.6rem] font-dana text-text-muted/60" style={{ fontWeight: 600 }}>از ۳۵</span>
     </div>
   )
 }
@@ -137,11 +137,11 @@ function BoardQualityTable({ funds, qData }) {
     { key: 'name', label: 'نام صندوق' },
     { key: 'aum', label: 'دارایی (میلیارد تومان)' },
     { key: 'mm', label: 'بازارگردان (میلیارد تومان)', max: 10 },
-    { key: 'bubble', label: 'حباب NAV', max: 10 },
+    { key: 'bubble', label: 'حباب NAV', max: 5 },
     { key: 'vol', label: 'حجم ماهانه', max: 10 },
     { key: 'trd', label: 'تعداد معاملات', max: 5 },
-    { key: 'chg', label: 'درصد روزانه', max: 10 },
-    { key: 'total', label: 'نمره کل', max: 50 },
+    { key: 'chg', label: 'درصد روزانه', max: 5 },
+    { key: 'total', label: 'نمره کل', max: 35 },
   ]
 
   return (
@@ -197,7 +197,7 @@ function BoardQualityTable({ funds, qData }) {
                 <td className="px-3 py-2.5 text-center">
                   {!sc
                     ? <span className="text-text-muted/40 text-xs animate-pulse">...</span>
-                    : <ScoreCell score={sc.bubble} max={10}
+                    : <ScoreCell score={sc.bubble} max={5}
                         value={sc.bubblePct != null ? (sc.bubblePct >= 0 ? '+' : '') + sc.bubblePct.toFixed(2) : '—'}
                         unit="٪"
                       />
@@ -226,7 +226,7 @@ function BoardQualityTable({ funds, qData }) {
                 <td className="px-3 py-2.5 text-center">
                   {!sc
                     ? <span className="text-text-muted/40 text-xs animate-pulse">...</span>
-                    : <ScoreCell score={sc.chg} max={10}
+                    : <ScoreCell score={sc.chg} max={5}
                         value={sc.d.changePct != null ? faNum(sc.d.changePct.toFixed(3)) : '—'}
                         unit="٪"
                       />

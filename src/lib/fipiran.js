@@ -233,14 +233,14 @@ export function scoreBoardMarketMaker(mmVolBT, sizeRial) {
 
 export function scoreBoardBubble(pct) {
   if (pct == null) return null
-  if (pct >= -0.1  && pct <= 0.1) return 10
-  if (pct >= -0.5  && pct < -0.1) return 9
-  if (pct >= -1.0  && pct < -0.5) return 8
-  if (pct >= -3.0  && pct < -1.0) return 6
-  if (pct < -3.0) return 5
-  if (pct > 0.1   && pct <= 0.5) return 7
-  if (pct > 0.5   && pct <= 1.0) return 4
-  if (pct > 1.0   && pct <= 3.0) return 3
+  if (pct >= -0.1  && pct <= 0.1) return 5
+  if (pct >= -0.5  && pct < -0.1) return 5
+  if (pct >= -1.0  && pct < -0.5) return 4
+  if (pct >= -3.0  && pct < -1.0) return 3
+  if (pct < -3.0) return 2
+  if (pct > 0.1   && pct <= 0.5) return 4
+  if (pct > 0.5   && pct <= 1.0) return 2
+  if (pct > 1.0   && pct <= 3.0) return 1
   return 0
 }
 
@@ -254,9 +254,9 @@ export function scoreBoardVolume(avgMonthVol, sizeRial, navRet) {
 
 export function scoreBoardChangeRate(changePct) {
   if (changePct == null) return 0
-  if (changePct >= 0.14) return 10
-  if (changePct >= 0.13) return 6
-  if (changePct >= 0.12) return 2
+  if (changePct >= 0.14) return 5
+  if (changePct >= 0.13) return 3
+  if (changePct >= 0.12) return 1
   return 0
 }
 

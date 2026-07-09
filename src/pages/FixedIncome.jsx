@@ -60,11 +60,10 @@ function negativeReservePenalty(fund) {
   const aumBT = fund.sizeRial > 0 ? fund.sizeRial / 1e10 : null
   if (!Number.isFinite(fund.reserve) || !aumBT || fund.reserve >= 0) return 0
   const pct = (fund.reserve / aumBT) * 100
-  if (pct <= -10) return -10
-  if (pct <= -5) return -8
-  if (pct <= -3) return -6
-  if (pct <= -1) return -4
-  return -2
+  if (pct <= -5) return -10
+  if (pct <= -3) return -8
+  if (pct <= -1) return -5
+  return -3
 }
 
 function historyScore(years) {
@@ -116,7 +115,7 @@ function applyAccumulatingEtfScore(rows, qData) {
     return {
       ...fund,
       rasadScore,
-      rasadScoreMax: 100,
+      rasadScoreMax: 90,
       rasadScoreParts: { board: boardScore, reserve, reservePenalty, ytm, history, aum },
     }
   })
