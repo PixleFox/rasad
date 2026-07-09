@@ -78,18 +78,18 @@ function aumScore(sizeRial) {
 }
 
 function buildReturnScoreMap(rows) {
-  const validRows = rows
-    .filter((fund) => Number.isFinite(fund.ytmReturn))
-    .sort((a, b) => b.ytmReturn - a.ytmReturn)
-  const bestYtm = validRows[0]?.ytmReturn
   const scoreForYtm = (ytmReturn) => {
     if (!Number.isFinite(ytmReturn)) return 0
-    const gapFromBest = Math.max(0, bestYtm - ytmReturn)
-    if (gapFromBest >= 6) return 0
-    const strength = Math.max(0, 1 - gapFromBest / 6)
-    return Math.round(35 * Math.pow(strength, 1.6))
+    if (ytmReturn >= 42) return 25
+    if (ytmReturn >= 40) return 23
+    if (ytmReturn >= 38) return 20
+    if (ytmReturn >= 36) return 16
+    if (ytmReturn >= 34) return 11
+    if (ytmReturn >= 32) return 6
+    if (ytmReturn >= 30) return 3
+    return 0
   }
-  return new Map(validRows.map((fund) => [fund.regNo, scoreForYtm(fund.ytmReturn)]))
+  return new Map(rows.map((fund) => [fund.regNo, scoreForYtm(fund.ytmReturn)]))
 }
 
 function applyAccumulatingEtfScore(rows, qData) {
@@ -104,7 +104,7 @@ function applyAccumulatingEtfScore(rows, qData) {
     return {
       ...fund,
       rasadScore,
-      rasadScoreMax: 110,
+      rasadScoreMax: 100,
       rasadScoreParts: { board: boardScore, reserve, ytm, history, aum },
     }
   })
