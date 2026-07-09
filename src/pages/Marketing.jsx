@@ -96,12 +96,12 @@ function ScoreCell({ score, max, value, unit }) {
 }
 
 function TotalScoreBadge({ score }) {
-  const max = 50
+  const max = 45
   const { bg, text } = cellColor(score, max)
   return (
     <div className="flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl" style={{ background: bg, border: `1px solid ${text}40` }}>
       <span className="text-base font-dana tabular-nums" style={{ fontWeight: 900, color: text }}>{faNum(score)}</span>
-      <span className="text-[0.6rem] font-dana text-text-muted/60" style={{ fontWeight: 600 }}>از ۵۰</span>
+      <span className="text-[0.6rem] font-dana text-text-muted/60" style={{ fontWeight: 600 }}>از ۴۵</span>
     </div>
   )
 }
@@ -136,7 +136,7 @@ function BoardQualityTable({ funds, qData }) {
   const cols = [
     { key: 'name', label: 'نام صندوق' },
     { key: 'aum', label: 'دارایی (میلیارد تومان)' },
-    { key: 'mm', label: 'بازارگردان (میلیارد تومان)', max: 15 },
+    { key: 'mm', label: 'بازارگردان (میلیارد تومان)', max: 10 },
     { key: 'bubble', label: 'حباب NAV', max: 10 },
     { key: 'vol', label: 'حجم ماهانه', max: 10 },
     { key: 'trd', label: 'تعداد معاملات', max: 5 },
@@ -190,7 +190,7 @@ function BoardQualityTable({ funds, qData }) {
                 <td className="px-3 py-2.5 text-center">
                   {!sc
                     ? <span className="text-text-muted/40 text-xs animate-pulse">...</span>
-                    : <ScoreCell score={sc.mm} max={15} value={sc.d.mmVolBT != null ? faNum(Math.round(sc.d.mmVolBT)) : '—'} />
+                    : <ScoreCell score={sc.mm} max={10} value={sc.d.mmVolBT != null ? faNum(Math.round(sc.d.mmVolBT)) : '—'} />
                   }
                 </td>
                 {/* حباب */}

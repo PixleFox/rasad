@@ -218,9 +218,17 @@ export async function fetchTsetmcQuality(insCode) {
 export function scoreBoardMarketMaker(mmVolBT, sizeRial) {
   if (!mmVolBT || !sizeRial || sizeRial <= 0) return 0
   const aumBT = sizeRial / 1e10
+  const aumHemat = sizeRial / 1e13
   const pct = (mmVolBT / aumBT) * 100
-  const steps = Math.max(0, Math.floor((25 - pct) / 5))
-  return Math.max(0, 15 - steps * 3)
+  const targetPct =
+    aumHemat > 50 ? 6 :
+    aumHemat >= 20 ? 7 :
+    aumHemat >= 10 ? 10 :
+    aumHemat >= 5 ? 15 :
+    aumHemat >= 1 ? 20 :
+    30
+  if (pct >= targetPct) return 10
+  return Math.max(0, Math.min(9, Math.floor((pct / targetPct) * 10)))
 }
 
 export function scoreBoardBubble(pct) {
@@ -240,8 +248,8 @@ export function scoreBoardVolume(avgMonthVol, sizeRial, navRet) {
   if (!avgMonthVol || !sizeRial || !navRet || sizeRial <= 0 || navRet <= 0) return 0
   const totalUnits = sizeRial / navRet
   const volPct = (avgMonthVol / totalUnits) * 100
-  const steps = Math.max(0, Math.floor((0.3 - volPct) / 0.1))
-  return Math.max(0, 10 - steps * 4)
+  if (volPct >= 5) return 10
+  return Math.max(0, Math.min(9, Math.floor((volPct / 5) * 10)))
 }
 
 export function scoreBoardChangeRate(changePct) {
