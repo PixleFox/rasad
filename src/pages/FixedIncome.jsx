@@ -67,35 +67,34 @@ function historyScore(years) {
 function aumScore(sizeRial) {
   const hemat = Number(sizeRial) / 1e13
   if (!Number.isFinite(hemat) || hemat <= 0) return 0
-  if (hemat > 50) return 10
-  if (hemat >= 20) return 9
-  if (hemat >= 10) return 8
-  if (hemat >= 5) return 7
-  if (hemat >= 1) return 6
-  if (hemat >= 0.5) return 5
-  if (hemat >= 0.1) return 4
-  return 3
+  if (hemat > 50) return 15
+  if (hemat >= 20) return 13
+  if (hemat >= 10) return 11
+  if (hemat >= 5) return 9
+  if (hemat >= 1) return 5
+  if (hemat >= 0.5) return 3
+  if (hemat >= 0.1) return 2
+  return 1
 }
 
 function buildReturnScoreMap(rows) {
-  const ranked = rows
+  const validRows = rows
     .filter((fund) => Number.isFinite(fund.ytmReturn))
     .sort((a, b) => b.ytmReturn - a.ytmReturn)
-  const n = ranked.length
-  const scoreForRank = (rank) => {
-    if (rank <= Math.max(1, Math.ceil(n * 0.01))) return 10
-    if (rank <= Math.max(1, Math.ceil(n * 0.05))) return 9
-    if (rank <= Math.max(1, Math.ceil(n * 0.10))) return 8
-    if (rank <= Math.max(1, Math.ceil(n * 0.15))) return 7
-    if (rank <= Math.max(1, Math.ceil(n * 0.20))) return 6
-    if (rank <= Math.max(1, Math.ceil(n * 0.40))) return 5
-    if (rank <= Math.max(1, Math.ceil(n * 0.50))) return 4
-    if (rank <= Math.max(1, Math.ceil(n * 0.60))) return 3
-    if (rank <= Math.max(1, Math.ceil(n * 0.70))) return 2
-    if (rank <= Math.max(1, Math.ceil(n * 0.80))) return 1
-    return 0
+  const n = validRows.length
+  if (!n) return new Map()
+  const lowerIndex = Math.min(n - 1, Math.floor(n * 0.95))
+  const upperIndex = Math.min(n - 1, Math.floor(n * 0.05))
+  const floorYtm = validRows[lowerIndex].ytmReturn
+  const ceilingYtm = validRows[upperIndex].ytmReturn
+  const span = ceilingYtm - floorYtm
+  const scoreForYtm = (ytmReturn) => {
+    if (!Number.isFinite(ytmReturn)) return 0
+    if (span <= 0) return 10
+    const clamped = Math.max(floorYtm, Math.min(ceilingYtm, ytmReturn))
+    return Math.round(((clamped - floorYtm) / span) * 20)
   }
-  return new Map(ranked.map((fund, index) => [fund.regNo, scoreForRank(index + 1)]))
+  return new Map(validRows.map((fund) => [fund.regNo, scoreForYtm(fund.ytmReturn)]))
 }
 
 function applyAccumulatingEtfScore(rows, qData) {
@@ -110,7 +109,7 @@ function applyAccumulatingEtfScore(rows, qData) {
     return {
       ...fund,
       rasadScore,
-      rasadScoreMax: 80,
+      rasadScoreMax: 95,
       rasadScoreParts: { board: boardScore, reserve, ytm, history, aum },
     }
   })
