@@ -102,30 +102,10 @@ export default function Stats() {
   const [liveLoading, setLiveLoading] = useState(true)
 
   useEffect(() => {
-    const isoDate = (daysBack) => {
-      const d = new Date()
-      d.setDate(d.getDate() - daysBack)
-      return d.toISOString().slice(0, 10)
-    }
-
     const run = async () => {
-      // Fetch today + up to 7 previous days, merge by regNo (union)
-      const { funds: todayFunds } = await fetchFundCompare(isoDate(0))
-      const byRegNo = new Map(todayFunds.map((f) => [f.regNo, f]))
-
-      for (let i = 1; i <= 7; i++) {
-        if (byRegNo.size >= todayFunds.length + 50 && i > 2) break
-        try {
-          const { funds: prev } = await fetchFundCompare(isoDate(i))
-          for (const f of prev) {
-            if (!byRegNo.has(f.regNo)) byRegNo.set(f.regNo, f)
-          }
-        } catch (_) {}
-      }
-
-      const merged = [...byRegNo.values()]
-      setLiveCount(merged.length)
-      const totalRial = merged.reduce((s, f) => s + (f.navRet > 0 && f.units > 0 ? f.navRet * f.units : 0), 0)
+      const { funds } = await fetchFundCompare(todayISO())
+      setLiveCount(funds.length)
+      const totalRial = funds.reduce((s, f) => s + (f.navRet > 0 && f.units > 0 ? f.navRet * f.units : 0), 0)
       setLiveAUM(Math.round(totalRial / 1e13))
     }
 

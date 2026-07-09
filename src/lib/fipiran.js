@@ -284,15 +284,8 @@ export async function fetchRangeReturns(startISO, endISO) {
   ])
 
   const startById = new Map(startSnap.funds.map((f) => [f.regNo, f]))
-  const completedEnd = [...endSnap.funds]
-  const endIds = new Set(completedEnd.map((fund) => fund.regNo))
-  for (const startFund of startSnap.funds) {
-    if (endIds.has(startFund.regNo)) continue
-    completedEnd.push({ ...startFund, stale: true, staleDate: startFund.dataDate, dataDate: startFund.dataDate })
-    endIds.add(startFund.regNo)
-  }
 
-  const funds = completedEnd.map((f) => {
+  const funds = endSnap.funds.map((f) => {
     const s = startById.get(f.regNo)
     const rangeReturn =
       s && s.navRet > 0 && f.navRet > 0 ? (f.navRet / s.navRet - 1) * 100 : null
@@ -602,7 +595,6 @@ export function computeManagers(funds, endISO) {
   const groups = new Map() // core → { entityTypes: Set, funds[] }
 
   for (const f of funds) {
-    if (f.isCharity) continue
     const { core, canonicalKey, entityType } = splitManagerName(f.manager)
     if (!canonicalKey) continue
     if (!groups.has(canonicalKey)) groups.set(canonicalKey, { core, entityTypes: new Set(), funds: [] })
