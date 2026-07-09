@@ -29,8 +29,8 @@ const symbolCell = (f) =>
     <span className="text-text-muted/40 text-xs">—</span>
   )
 
-const returnCell = (f) => {
-  const v = f.rangeReturn
+const percentCell = (value) => {
+  const v = value
   if (!Number.isFinite(v)) return <span className="text-text-muted/40 text-xs">—</span>
   const color = v >= 0 ? '#00FF9D' : '#FF3B6B'
   return (
@@ -39,6 +39,17 @@ const returnCell = (f) => {
     </span>
   )
 }
+const returnCell = (f) => percentCell(f.rangeReturn)
+const ytmCell = (f) => percentCell(f.ytmReturn)
+const declaredRateCell = (f) => (
+  Number.isFinite(f.declaredRate) ? (
+    <span className="text-sm font-dana tabular-nums text-neon-green" style={{ fontWeight: 900 }}>
+      {fmtPercent(f.declaredRate)}
+    </span>
+  ) : (
+    <span className="text-text-muted/40 text-xs">—</span>
+  )
+)
 
 const sizeCell = (f) => (
   <span className="text-text-primary text-sm font-dana tabular-nums" style={{ fontWeight: 600 }}>
@@ -57,6 +68,8 @@ const COL = {
   symbol: { key: 'symbol', label: 'نماد', render: symbolCell, exportValue: (f) => f.symbol },
   size: { key: 'size', label: 'دارایی (میلیارد تومان)', sortVal: (f) => f.sizeRial, render: sizeCell, exportValue: (f) => Math.round((f.sizeRial || 0) / 1e10) },
   return: { key: 'return', label: 'بازدهی در بازه', sortVal: (f) => f.rangeReturn, render: returnCell, exportValue: (f) => f.rangeReturn },
+  ytm: { key: 'ytm', label: 'YTM بازه', sortVal: (f) => f.ytmReturn, render: ytmCell, exportValue: (f) => f.ytmReturn },
+  declaredRate: { key: 'declaredRate', label: 'نرخ اعلامی', sortVal: (f) => f.declaredRate, render: declaredRateCell, exportValue: (f) => f.declaredRate },
   years: { key: 'years', label: 'سابقه', sortVal: (f) => f.years, render: yearsCell, exportValue: (f) => f.years },
   score: { key: 'score', label: 'شاخص رصد', sortVal: (f) => f.rasadScore, render: (f) => <ScorePill score={f.rasadScore} />, exportValue: (f) => f.rasadScore },
   site: { key: 'site', label: 'سایت', render: (f) => <SiteLink url={f.website} />, exportValue: (f) => f.website },
@@ -68,6 +81,7 @@ export const fixedIncomeColumns = [
   COL.symbol,
   COL.size,
   COL.return,
+  COL.declaredRate,
   COL.years,
   {
     key: 'reserve',
@@ -89,6 +103,8 @@ export const fixedIncomeColumns = [
   COL.score,
   COL.site,
 ]
+
+export const fixedIncomeColumnParts = COL
 
 // غیر درآمد ثابت (سهامی و …): adds risk level + bubble
 export const otherFundsColumns = [

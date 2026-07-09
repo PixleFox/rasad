@@ -1,10 +1,10 @@
 import { useState, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import FundsPageLayout from '../components/FundsPageLayout'
-import FundsTable, { SiteLink } from '../components/FundsTable'
-import { fixedIncomeColumns } from '../components/fundColumns'
+import FundsTable from '../components/FundsTable'
+import { fixedIncomeColumnParts } from '../components/fundColumns'
 import { useRangeFunds } from '../hooks/useRangeFunds'
-import { splitFixedIncome, enrichFunds, faNum, fmtPercent } from '../lib/fipiran'
+import { splitFixedIncome, enrichFunds, faNum, daysBetween } from '../lib/fipiran'
 import { fixedIncomeDeclaredRates } from '../data/fixedIncomeDeclaredRates'
 import FundSummary from '../components/FundSummary'
 
@@ -13,91 +13,65 @@ const TABS = [
   { id: 'etfAccumulating',      label: 'ETF جمع‌شونده',      badge: 'قابل معامله · بدون پرداخت سود' },
   { id: 'issuanceDividend',     label: 'صدور/ابطالی تقسیم سودی',    badge: 'غیرقابل معامله · با پرداخت سود' },
   { id: 'issuanceAccumulating', label: 'صدور/ابطالی جمع‌شونده',      badge: 'غیرقابل معامله · بدون پرداخت سود' },
-  { id: 'declaredRates',        label: 'نرخ اعلامی صندوق‌های درآمد ثابت', badge: 'داده دستی · نرخ اعلامی' },
 ]
 
-const toBillionToman = (rial) => (Number.isFinite(rial) ? rial / 1e10 : null)
-const rateText = (value) => (Number.isFinite(value) ? fmtPercent(value) : '—')
-const amountText = (rial) => {
-  const value = toBillionToman(rial)
-  return Number.isFinite(value) ? faNum(Math.round(value)) : '—'
+const normalizeText = (value) => String(value || '')
+  .trim()
+  .replace(/[يى]/g, 'ی')
+  .replace(/ك/g, 'ک')
+  .replace(/[\u200c\u200d\u200e\u200f]/g, ' ')
+  .replace(/\s+/g, ' ')
+  .replace(/^(?:صندوق سرمایه گذاری|صندوق سرمایه‌گذاری|در اوراق بهادار با درآمد ثابت|درآمد ثابت|نوع دوم)\s+/g, '')
+  .replace(/\s+/g, ' ')
+
+const compactKey = (value) => normalizeText(value).replace(/\s+/g, '')
+const declaredBySymbol = new Map(fixedIncomeDeclaredRates.filter((rate) => rate.symbol).map((rate) => [compactKey(rate.symbol), rate]))
+const declaredByName = new Map(fixedIncomeDeclaredRates.map((rate) => [compactKey(rate.name), rate]))
+
+function findDeclaredRate(fund) {
+  const bySymbol = fund.symbol ? declaredBySymbol.get(compactKey(fund.symbol)) : null
+  if (bySymbol) return bySymbol
+  const fundName = compactKey(fund.name)
+  return declaredByName.get(fundName) || null
 }
 
-const declaredRateColumns = [
-  {
-    key: 'name',
-    label: 'نام صندوق',
-    align: 'start',
-    render: (f) => (
-      <div className="flex flex-col gap-0.5 min-w-[170px]">
-        <span className="text-text-primary text-sm font-dana truncate" style={{ fontWeight: 900 }}>{f.name}</span>
-        <span className="text-text-muted text-xs font-dana truncate" style={{ fontWeight: 600 }}>
-          {f.symbol || f.investmentMethod || '—'}
-        </span>
-      </div>
-    ),
-    exportValue: (f) => f.name,
-  },
-  {
-    key: 'declaredRate',
-    label: 'درصد نرخ اعلامی',
-    sortVal: (f) => f.declaredRate,
-    render: (f) => (
-      <span className="text-sm font-dana tabular-nums text-neon-green" style={{ fontWeight: 900 }}>
-        {rateText(f.declaredRate)}
-      </span>
-    ),
-    exportValue: (f) => f.declaredRate,
-  },
-  {
-    key: 'netAsset',
-    label: 'سرمایه تحت مدیریت (میلیارد تومان)',
-    sortVal: (f) => f.netAssetRial,
-    render: (f) => (
-      <span className="text-text-primary text-sm font-dana tabular-nums" style={{ fontWeight: 700 }}>
-        {amountText(f.netAssetRial)}
-      </span>
-    ),
-    exportValue: (f) => Math.round(toBillionToman(f.netAssetRial) || 0),
-  },
-  {
-    key: 'oneYearReturn',
-    label: 'بازده یک ساله',
-    sortVal: (f) => f.oneYearReturn,
-    render: (f) => (
-      <span className="text-text-primary text-sm font-dana tabular-nums" style={{ fontWeight: 700 }}>
-        {rateText(f.oneYearReturn)}
-      </span>
-    ),
-    exportValue: (f) => f.oneYearReturn,
-  },
-  {
-    key: 'updatedAt',
-    label: 'تاریخ به‌روزرسانی',
-    render: (f) => (
-      <span className="text-text-muted text-xs font-dana tabular-nums" style={{ fontWeight: 600 }}>
-        {f.updatedAt || '—'}
-      </span>
-    ),
-    exportValue: (f) => f.updatedAt,
-  },
-  {
-    key: 'site',
-    label: 'سایت',
-    render: (f) => <SiteLink url={f.website} />,
-    exportValue: (f) => f.website,
-  },
-  {
-    key: 'contactStatus',
-    label: 'وضعیت تماس',
-    render: (f) => (
-      <span className={`text-xs font-dana ${f.contactStatus ? 'text-amber-300' : 'text-text-muted/40'}`} style={{ fontWeight: 600 }}>
-        {f.contactStatus || '—'}
-      </span>
-    ),
-    exportValue: (f) => f.contactStatus,
-  },
-]
+function annualizedYtm(rangeReturn, dayCount) {
+  if (!Number.isFinite(rangeReturn) || !Number.isFinite(dayCount) || dayCount <= 0 || rangeReturn <= -100) return null
+  return (Math.pow(1 + rangeReturn / 100, 365 / dayCount) - 1) * 100
+}
+
+function buildColumns(tab) {
+  const c = fixedIncomeColumnParts
+  const dividend = tab === 'etfDividend' || tab === 'issuanceDividend'
+  const issuance = tab === 'issuanceDividend' || tab === 'issuanceAccumulating'
+  return [
+    c.name,
+    ...(!issuance ? [c.symbol] : []),
+    c.size,
+    ...(!dividend ? [c.ytm] : []),
+    c.declaredRate,
+    c.years,
+    {
+      key: 'reserve',
+      label: 'ذخیره صندوق (میلیارد تومان)',
+      sortVal: (f) => f.reserve,
+      exportValue: (f) => f.reserve,
+      render: (f) =>
+        f.reserve != null ? (
+          <span
+            className="text-sm font-dana tabular-nums"
+            style={{ fontWeight: 700, color: f.reserve >= 0 ? '#00FF9D' : '#FF3B6B' }}
+          >
+            {(f.reserve >= 0 ? '+' : '−') + faNum(Math.abs(Math.round(f.reserve)))}
+          </span>
+        ) : (
+          <span className="text-text-muted/40 text-xs">—</span>
+        ),
+    },
+    c.score,
+    c.site,
+  ]
+}
 
 export default function FixedIncome() {
   const { funds, startDate, endDate, loading, error, startISO, endISO, setStartISO, setEndISO } = useRangeFunds()
@@ -105,17 +79,28 @@ export default function FixedIncome() {
 
   const groups = useMemo(() => {
     const split = splitFixedIncome(funds)
+    const dayCount = daysBetween(startDate || startISO, endDate || endISO)
+    const addDeclaredAndYtm = (rows) => enrichFunds(rows, endDate || endISO).map((fund) => {
+      const declared = findDeclaredRate(fund)
+      return {
+        ...fund,
+        declaredRate: declared?.declaredRate ?? null,
+        declaredRateUpdatedAt: declared?.updatedAt ?? null,
+        ytmReturn: annualizedYtm(fund.rangeReturn, dayCount),
+      }
+    })
     return {
-      etfDividend:          enrichFunds(split.etfDividend,          endDate || endISO),
-      etfAccumulating:      enrichFunds(split.etfAccumulating,      endDate || endISO),
-      issuanceDividend:     enrichFunds(split.issuanceDividend,     endDate || endISO),
-      issuanceAccumulating: enrichFunds(split.issuanceAccumulating, endDate || endISO),
+      etfDividend:          addDeclaredAndYtm(split.etfDividend),
+      etfAccumulating:      addDeclaredAndYtm(split.etfAccumulating),
+      issuanceDividend:     addDeclaredAndYtm(split.issuanceDividend),
+      issuanceAccumulating: addDeclaredAndYtm(split.issuanceAccumulating),
     }
-  }, [funds, endDate, endISO])
+  }, [funds, startDate, endDate, startISO, endISO])
 
-  const isDeclaredRatesTab = tab === 'declaredRates'
-  const rows = isDeclaredRatesTab ? fixedIncomeDeclaredRates : groups[tab]
-  const getTabCount = (id) => (id === 'declaredRates' ? fixedIncomeDeclaredRates.length : groups[id]?.length ?? 0)
+  const rows = groups[tab]
+  const getTabCount = (id) => groups[id]?.length ?? 0
+  const dividendTab = tab === 'etfDividend' || tab === 'issuanceDividend'
+  const columns = useMemo(() => buildColumns(tab), [tab])
 
   return (
     <FundsPageLayout
@@ -162,26 +147,24 @@ export default function FixedIncome() {
       </motion.div>
 
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.1 }}>
-        {!isDeclaredRatesTab && <FundSummary rows={rows} loading={loading} />}
+        <FundSummary rows={rows} loading={loading} showReturns={!dividendTab} returnKey="ytmReturn" returnLabel="YTM میانگین" />
         <FundsTable
-          columns={isDeclaredRatesTab ? declaredRateColumns : fixedIncomeColumns}
+          columns={columns}
           rows={rows}
-          defaultSortKey={isDeclaredRatesTab ? 'declaredRate' : 'score'}
-          minWidth={isDeclaredRatesTab ? 980 : 860}
-          loading={isDeclaredRatesTab ? false : loading}
-          error={isDeclaredRatesTab ? null : error}
+          defaultSortKey="score"
+          minWidth={900}
+          loading={loading}
+          error={error}
           onRetry={() => setStartISO((d) => d)}
           emptyText="صندوقی در این دسته یافت نشد."
-          goodSortKeys={isDeclaredRatesTab ? ['declaredRate', 'netAsset', 'oneYearReturn'] : undefined}
+          goodSortKeys={['score', 'ytm', 'size', 'years', 'reserve', 'declaredRate']}
           rowKey={(row) => row.id ?? row.regNo}
-          exportFileName={isDeclaredRatesTab ? 'fixed-income-declared-rates' : 'fixed-income-funds'}
+          exportFileName="fixed-income-funds"
         />
       </motion.div>
 
       <p className="text-center text-text-muted text-xs font-dana mt-5 leading-relaxed" style={{ fontWeight: 600 }}>
-        {isDeclaredRatesTab
-          ? 'منبع: فایل دستی نرخ اعلامی صندوق‌ها · سرمایه تحت مدیریت به میلیارد تومان نمایش داده می‌شود.'
-          : 'منبع: فیپیران · ذخیره صندوق = (قیمت آماری − قیمت ابطال) × تعداد واحد · شاخص رصد امتیاز اختصاصی ۱۰ تا ۱۰۰ بر اساس بازدهی، اندازه، سابقه و ارزندگی است.'}
+        منبع: فیپیران و فایل دستی نرخ اعلامی · YTM بازه برای صندوق‌های بدون تقسیم سود از بازده واقعی بازه و تعداد روزهای واقعی سالانه‌سازی می‌شود · ذخیره صندوق = (قیمت آماری − قیمت ابطال) × تعداد واحد
       </p>
     </FundsPageLayout>
   )

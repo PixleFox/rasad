@@ -121,7 +121,9 @@ export default function FundsTable({
       return <span className="text-text-primary text-sm font-dana tabular-nums" style={{ fontWeight: 600 }}>{Number.isFinite(value) ? value.toLocaleString('fa-IR', { maximumFractionDigits: 1 }) : '—'}</span>
     },
   }
-  const allColumns = [rankCol, ...columns, ...(hasFundAum ? [dollarColumn] : [])]
+  const siteColumn = columns.find((col) => col.key === 'site')
+  const columnsBeforeSite = siteColumn ? columns.filter((col) => col.key !== 'site') : columns
+  const allColumns = [rankCol, ...columnsBeforeSite, ...(hasFundAum ? [dollarColumn] : []), ...(siteColumn ? [siteColumn] : [])]
   const exportColumns = allColumns.map((col) => ({
     ...col,
     exportValue: col.exportValue || ((row, i) => {
