@@ -57,7 +57,7 @@ const scoreHint = (score, max, label = 'نمره') => {
 const ytmCell = (f) => (
   <div className="flex flex-col items-center">
     {percentCell(f.ytmReturn)}
-    {scoreHint(f.rasadScoreParts?.ytm, 25)}
+    {scoreHint(f.rasadScoreParts?.ytm, 40)}
   </div>
 )
 const declaredRateCell = (f) => (
@@ -75,7 +75,7 @@ const sizeCell = (f) => (
     <span className="text-text-primary text-sm font-dana tabular-nums" style={{ fontWeight: 600 }}>
       {fmtSize(f.sizeRial)}
     </span>
-    {scoreHint(f.rasadScoreParts?.aum, 15)}
+    {scoreHint(f.rasadScoreParts?.aum, 20)}
   </div>
 )
 
@@ -94,7 +94,7 @@ const scoreCell = (f) => {
       <ScorePill score={f.rasadScore} max={f.rasadScoreMax || 100} />
       {p && (
         <span className="max-w-[150px] text-center text-[0.55rem] leading-4 text-text-muted font-dana tabular-nums" style={{ fontWeight: 700 }}>
-          تابلو {faNum(p.board)}/۳۵ · YTM {faNum(p.ytm)}/۲۵ · AUM {faNum(p.aum)}/۱۵ · ذخیره {faNum(p.reserve)}/۱۰ · جریمه {faNum(p.reservePenalty)}
+          تابلو {faNum(p.board)}/۲۰ · YTM {faNum(p.ytm)}/۴۰ · AUM {faNum(p.aum)}/۲۰ · ذخیره {faNum(p.reserve)}/۱۵ · جریمه {faNum(p.reservePenalty)}
         </span>
       )}
     </div>

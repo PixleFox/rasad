@@ -44,26 +44,18 @@ function reserveScore(fund) {
   const aumBT = fund.sizeRial > 0 ? fund.sizeRial / 1e10 : null
   if (!Number.isFinite(fund.reserve) || !aumBT) return 0
   const pct = (fund.reserve / aumBT) * 100
-  if (pct >= 30) return 10
-  if (pct >= 20) return 9
-  if (pct >= 10) return 8
-  if (pct >= 5) return 7
-  if (pct >= 1) return 6
-  if (pct >= 0) return 5
-  if (pct >= -1) return 4
-  if (pct >= -5) return 3
-  if (pct <= -10) return -3
-  return 0
+  if (pct <= 0) return 0
+  return Number(Math.min(15, 15 * Math.pow(Math.min(pct, 30) / 30, 0.55)).toFixed(1))
 }
 
 function negativeReservePenalty(fund) {
   const aumBT = fund.sizeRial > 0 ? fund.sizeRial / 1e10 : null
   if (!Number.isFinite(fund.reserve) || !aumBT || fund.reserve >= 0) return 0
   const pct = (fund.reserve / aumBT) * 100
-  if (pct <= -5) return -10
-  if (pct <= -3) return -8
-  if (pct <= -1) return -5
-  return -3
+  if (pct <= -5) return -15
+  if (pct <= -3) return -11
+  if (pct <= -1) return -7
+  return -4
 }
 
 function historyScore(years) {
@@ -77,27 +69,18 @@ function historyScore(years) {
 function aumScore(sizeRial) {
   const hemat = Number(sizeRial) / 1e13
   if (!Number.isFinite(hemat) || hemat <= 0) return 0
-  if (hemat > 50) return 15
-  if (hemat >= 20) return 13
-  if (hemat >= 10) return 11
-  if (hemat >= 5) return 9
-  if (hemat >= 1) return 5
-  if (hemat >= 0.5) return 3
-  if (hemat >= 0.1) return 2
-  return 1
+  if (hemat >= 50) return 20
+  if (hemat >= 5) return Number((8 + ((hemat - 5) / 45) * 12).toFixed(1))
+  if (hemat >= 1) return Number((2 + ((hemat - 1) / 4) * 6).toFixed(1))
+  return Number(Math.max(0.5, hemat * 2).toFixed(1))
 }
 
 function buildReturnScoreMap(rows) {
   const scoreForYtm = (ytmReturn) => {
     if (!Number.isFinite(ytmReturn)) return 0
-    if (ytmReturn >= 42) return 25
-    if (ytmReturn >= 40) return 23
-    if (ytmReturn >= 38) return 20
-    if (ytmReturn >= 36) return 16
-    if (ytmReturn >= 34) return 11
-    if (ytmReturn >= 32) return 6
-    if (ytmReturn >= 30) return 3
-    return 0
+    if (ytmReturn <= 30) return 0
+    const strength = Math.min(1, (ytmReturn - 30) / 12)
+    return Number((40 * Math.pow(strength, 1.1)).toFixed(1))
   }
   return new Map(rows.map((fund) => [fund.regNo, scoreForYtm(fund.ytmReturn)]))
 }
@@ -105,7 +88,8 @@ function buildReturnScoreMap(rows) {
 function applyAccumulatingEtfScore(rows, qData) {
   const returnScores = buildReturnScoreMap(rows)
   return rows.map((fund) => {
-    const boardScore = computeBoardQualityScore(fund, qData[fund.insCode])?.total ?? 0
+    const boardRaw = computeBoardQualityScore(fund, qData[fund.insCode])?.total ?? 0
+    const boardScore = Number(((boardRaw / 35) * 20).toFixed(1))
     const reserve = reserveScore(fund)
     const ytm = returnScores.get(fund.regNo) ?? 0
     const history = historyScore(fund.years)
@@ -148,7 +132,7 @@ function buildColumns(tab) {
             </span>
             {Number.isFinite(f.rasadScoreParts?.reserve) && (
               <span className="mt-1 text-[0.58rem] font-dana tabular-nums text-neon-cyan" style={{ fontWeight: 800 }}>
-                نمره: {faNum(f.rasadScoreParts.reserve)}/۱۰
+                نمره: {faNum(f.rasadScoreParts.reserve)}/۱۵
               </span>
             )}
             {Number.isFinite(f.rasadScoreParts?.reservePenalty) && f.rasadScoreParts.reservePenalty < 0 && (
