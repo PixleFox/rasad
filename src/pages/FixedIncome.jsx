@@ -98,7 +98,7 @@ function applyAccumulatingEtfScore(rows, qData) {
     return {
       ...fund,
       rasadScore,
-      rasadScoreMax: 90,
+      rasadScoreMax: 100,
       rasadScoreParts: { board: boardScore, reserve, reservePenalty, ytm, history, aum },
     }
   })

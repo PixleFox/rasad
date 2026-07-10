@@ -299,7 +299,7 @@ export function ScorePill({ score, max = 100 }) {
   const color = ratio >= 80 ? '#00FF9D' : ratio >= 60 ? '#00D4FF' : ratio >= 40 ? '#FBBF24' : '#FF3B6B'
   return (
     <span
-      className="inline-flex min-w-10 h-8 items-center justify-center rounded-lg px-2 text-sm font-dana tabular-nums"
+      className="inline-flex h-8 min-w-14 items-center justify-center rounded-lg px-2 text-sm font-dana tabular-nums whitespace-nowrap"
       style={{
         fontWeight: 900,
         color,
@@ -308,8 +308,7 @@ export function ScorePill({ score, max = 100 }) {
         boxShadow: `0 0 12px ${color}25`,
       }}
     >
-      {Number(score).toLocaleString('fa-IR')}
-      {max !== 100 && <span className="mr-1 text-[0.55rem] opacity-70">/ {Number(max).toLocaleString('fa-IR')}</span>}
+      {Number(score).toLocaleString('fa-IR', { maximumFractionDigits: 1 })}
     </span>
   )
 }
