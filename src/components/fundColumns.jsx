@@ -45,21 +45,7 @@ const percentCell = (value) => {
   )
 }
 const returnCell = (f) => percentCell(f.rangeReturn)
-const scoreHint = (score, max, label = 'نمره') => {
-  if (!Number.isFinite(score)) return null
-  const color = score < 0 ? '#FF3B6B' : '#00D4FF'
-  return (
-    <span className="mt-1 block text-[0.58rem] font-dana tabular-nums" style={{ fontWeight: 800, color }}>
-      {label}: {faNum(score)}{max ? `/${faNum(max)}` : ''}
-    </span>
-  )
-}
-const ytmCell = (f) => (
-  <div className="flex flex-col items-center">
-    {percentCell(f.ytmReturn)}
-    {scoreHint(f.rasadScoreParts?.ytm, 40)}
-  </div>
-)
+const ytmCell = (f) => percentCell(f.ytmReturn)
 const declaredRateCell = (f) => (
   Number.isFinite(f.declaredRate) ? (
     <span className="text-sm font-dana tabular-nums text-neon-green" style={{ fontWeight: 900 }}>
@@ -71,35 +57,17 @@ const declaredRateCell = (f) => (
 )
 
 const sizeCell = (f) => (
-  <div className="flex flex-col items-center">
-    <span className="text-text-primary text-sm font-dana tabular-nums" style={{ fontWeight: 600 }}>
-      {fmtSize(f.sizeRial)}
-    </span>
-    {scoreHint(f.rasadScoreParts?.aum, 20)}
-  </div>
+  <span className="text-text-primary text-sm font-dana tabular-nums" style={{ fontWeight: 600 }}>
+    {fmtSize(f.sizeRial)}
+  </span>
 )
 
 const yearsCell = (f) => (
-  <div className="flex flex-col items-center">
-    <span className="text-text-primary text-sm font-dana tabular-nums" style={{ fontWeight: 600 }}>
-      {f.years != null ? faNum(f.years.toFixed(1)) : '—'}
-    </span>
-    {scoreHint(f.rasadScoreParts?.history, 5)}
-  </div>
+  <span className="text-text-primary text-sm font-dana tabular-nums" style={{ fontWeight: 600 }}>
+    {f.years != null ? faNum(f.years.toFixed(1)) : '—'}
+  </span>
 )
-const scoreCell = (f) => {
-  const p = f.rasadScoreParts
-  return (
-    <div className="flex flex-col items-center gap-1">
-      <ScorePill score={f.rasadScore} max={f.rasadScoreMax || 100} />
-      {p && (
-        <span className="max-w-[150px] text-center text-[0.55rem] leading-4 text-text-muted font-dana tabular-nums" style={{ fontWeight: 700 }}>
-          تابلو {faNum(p.board)}/۲۰ · YTM {faNum(p.ytm)}/۴۰ · AUM {faNum(p.aum)}/۲۰ · ذخیره {faNum(p.reserve)}/۱۵ · جریمه {faNum(p.reservePenalty)}
-        </span>
-      )}
-    </div>
-  )
-}
+const scoreCell = (f) => <ScorePill score={f.rasadScore} max={f.rasadScoreMax || 100} />
 
 const COL = {
   name: { key: 'name', label: 'نام صندوق', align: 'start', render: nameCell, exportValue: (f) => f.name },
