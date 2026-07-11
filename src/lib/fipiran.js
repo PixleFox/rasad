@@ -58,6 +58,17 @@ export const toJalali = (iso) => {
   }
 }
 
+export const toMonthlyScheduleLabel = (iso) => {
+  try {
+    const day = new Date(iso + 'T00:00:00').toLocaleDateString('fa-IR', {
+      day: 'numeric',
+    })
+    return `${day}ام هر ماه`
+  } catch {
+    return null
+  }
+}
+
 // Local-component ISO (avoids UTC day-shift; Iran is UTC+3:30).
 const toISO = (d) => {
   const y = d.getFullYear()
@@ -355,6 +366,7 @@ export async function fetchEtfDividendEvent(fund, endISO, priceField = 'pDrCotVa
   const monthlyReturn = Math.abs(latest.returnPct)
   return {
     dividendDate: latest.date,
+    dividendDayOfMonth: Number(new Date(latest.date + 'T00:00:00').toLocaleDateString('en-US-u-ca-persian', { day: 'numeric' })),
     dividendPeriodReturn: monthlyReturn,
     dividendIntervalDays: intervalDays,
     dividendAnnualizedReturn: intervalDays > 0

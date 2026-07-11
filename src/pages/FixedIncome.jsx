@@ -4,7 +4,7 @@ import FundsPageLayout from '../components/FundsPageLayout'
 import FundsTable from '../components/FundsTable'
 import { fixedIncomeColumnParts } from '../components/fundColumns'
 import { useRangeFunds } from '../hooks/useRangeFunds'
-import { splitFixedIncome, enrichFunds, fetchTsetmcQuality, fetchEtfDividendEvent, computeBoardQualityScore, faNum, daysBetween, toJalali } from '../lib/fipiran'
+import { splitFixedIncome, enrichFunds, fetchTsetmcQuality, fetchEtfDividendEvent, computeBoardQualityScore, faNum, daysBetween, toMonthlyScheduleLabel } from '../lib/fipiran'
 import { fixedIncomeDeclaredRates } from '../data/fixedIncomeDeclaredRates'
 import FundSummary from '../components/FundSummary'
 
@@ -117,11 +117,11 @@ function buildColumns(tab) {
     ...(tab === 'etfDividend' ? [{
       key: 'dividendDate',
       label: 'زمان تقسیم سود',
-      sortVal: (f) => f.dividendDate,
-      exportValue: (f) => f.dividendDate ? toJalali(f.dividendDate) : null,
+      sortVal: (f) => f.dividendDayOfMonth,
+      exportValue: (f) => f.dividendDate ? toMonthlyScheduleLabel(f.dividendDate) : null,
       render: (f) => f.dividendDate ? (
         <span className="text-sm font-dana tabular-nums text-text-primary" style={{ fontWeight: 700 }}>
-          {toJalali(f.dividendDate)}
+          {toMonthlyScheduleLabel(f.dividendDate)}
         </span>
       ) : <span className="text-text-muted/40 text-xs">—</span>,
     }] : []),
