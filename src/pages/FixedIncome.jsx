@@ -9,6 +9,7 @@ import { fixedIncomeDeclaredRates } from '../data/fixedIncomeDeclaredRates'
 import FundSummary from '../components/FundSummary'
 
 const TABS = [
+  { id: 'all',                  label: 'همه صندوق‌ها',      badge: 'همه صندوق‌های درآمد ثابت' },
   { id: 'etfDividend',          label: 'ETF تقسیم سودی',    badge: 'قابل معامله · با پرداخت سود' },
   { id: 'etfAccumulating',      label: 'ETF جمع‌شونده',      badge: 'قابل معامله · بدون پرداخت سود' },
   { id: 'issuanceDividend',     label: 'صدور/ابطالی تقسیم سودی',    badge: 'غیرقابل معامله · با پرداخت سود' },
@@ -106,15 +107,24 @@ function applyEtfScore(rows, qData) {
 
 function buildColumns(tab) {
   const c = fixedIncomeColumnParts
-  const dividend = tab === 'etfDividend' || tab === 'issuanceDividend'
-  const issuance = tab === 'issuanceDividend' || tab === 'issuanceAccumulating'
+  const empty = <span className="text-text-muted/40 text-xs">—</span>
   return [
     c.name,
-    ...(!issuance ? [c.symbol] : []),
+    c.symbol,
     c.size,
-    ...(!dividend ? [c.return] : []),
-    ...(tab === 'etfDividend' || !dividend ? [c.ytm] : []),
-    ...(tab === 'etfDividend' ? [{
+    {
+      ...c.return,
+      sortVal: (f) => f.fixedIncomeDividend ? null : f.rangeReturn,
+      exportValue: (f) => f.fixedIncomeDividend ? null : f.rangeReturn,
+      render: (f) => f.fixedIncomeDividend ? empty : c.return.render(f),
+    },
+    {
+      ...c.ytm,
+      sortVal: (f) => f.fixedIncomeTab === 'issuanceDividend' ? null : f.ytmReturn,
+      exportValue: (f) => f.fixedIncomeTab === 'issuanceDividend' ? null : f.ytmReturn,
+      render: (f) => f.fixedIncomeTab === 'issuanceDividend' ? empty : c.ytm.render(f),
+    },
+    {
       key: 'dividendDate',
       label: 'زمان تقسیم سود',
       sortVal: (f) => f.dividendDayOfMonth,
@@ -124,7 +134,7 @@ function buildColumns(tab) {
           {toMonthlyScheduleLabel(f.dividendDate)}
         </span>
       ) : <span className="text-text-muted/40 text-xs">—</span>,
-    }] : []),
+    },
     c.declaredRate,
     c.years,
     {
@@ -142,7 +152,7 @@ function buildColumns(tab) {
           </span>
         ) : (
           <span className="text-text-muted/40 text-xs">—</span>
-        ),
+      ),
     },
     c.score,
     c.site,
@@ -227,6 +237,11 @@ export default function FixedIncome() {
 
   const groups = useMemo(() => {
     const split = splitFixedIncome(funds)
+    const withGroup = (rows, fixedIncomeTab) => rows.map((fund) => ({
+      ...fund,
+      fixedIncomeTab,
+      fixedIncomeDividend: fixedIncomeTab === 'etfDividend' || fixedIncomeTab === 'issuanceDividend',
+    }))
     const addDeclaredAndYtm = (rows) => enrichFunds(rows, endDate || endISO).map((fund) => {
       const declared = findDeclaredRate(fund)
       const dayCount = fund.rangeDayCount || daysBetween(startDate || startISO, endDate || endISO)
@@ -242,18 +257,27 @@ export default function FixedIncome() {
       const event = dividendData[fund.regNo]
       return event ? { ...fund, ...event, ytmReturn: event.dividendAnnualizedReturn } : { ...fund, ytmReturn: null }
     })
+    const next = {
+      etfDividend:          withGroup(applyEtfScore(etfDividend, qData), 'etfDividend'),
+      etfAccumulating:      withGroup(applyEtfScore(etfAccumulating, qData), 'etfAccumulating'),
+      issuanceDividend:     withGroup(addDeclaredAndYtm(split.issuanceDividend), 'issuanceDividend'),
+      issuanceAccumulating: withGroup(addDeclaredAndYtm(split.issuanceAccumulating), 'issuanceAccumulating'),
+    }
     return {
-      etfDividend:          applyEtfScore(etfDividend, qData),
-      etfAccumulating:      applyEtfScore(etfAccumulating, qData),
-      issuanceDividend:     addDeclaredAndYtm(split.issuanceDividend),
-      issuanceAccumulating: addDeclaredAndYtm(split.issuanceAccumulating),
+      all: [
+        ...next.etfAccumulating,
+        ...next.etfDividend,
+        ...next.issuanceAccumulating,
+        ...next.issuanceDividend,
+      ],
+      ...next,
     }
   }, [funds, startDate, endDate, startISO, endISO, qData, dividendData])
 
   const rows = groups[tab]
   const getTabCount = (id) => groups[id]?.length ?? 0
   const dividendTab = tab === 'etfDividend' || tab === 'issuanceDividend'
-  const activeLoading = loading || ((tab === 'etfAccumulating' || tab === 'etfDividend') && qLoading) || (tab === 'etfDividend' && dividendLoading)
+  const activeLoading = loading || ((tab === 'all' || tab === 'etfAccumulating' || tab === 'etfDividend') && qLoading) || ((tab === 'all' || tab === 'etfDividend') && dividendLoading)
   const columns = useMemo(() => buildColumns(tab), [tab])
 
   return (
@@ -306,7 +330,7 @@ export default function FixedIncome() {
           columns={columns}
           rows={rows}
           defaultSortKey="score"
-          minWidth={900}
+          minWidth={1180}
           loading={activeLoading}
           error={error}
           onRetry={() => setStartISO((d) => d)}
