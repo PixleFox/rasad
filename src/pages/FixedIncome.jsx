@@ -4,7 +4,7 @@ import FundsPageLayout from '../components/FundsPageLayout'
 import FundsTable from '../components/FundsTable'
 import { fixedIncomeColumnParts } from '../components/fundColumns'
 import { useRangeFunds } from '../hooks/useRangeFunds'
-import { splitFixedIncome, enrichFunds, fetchTsetmcQuality, computeBoardQualityScore, faNum, daysBetween } from '../lib/fipiran'
+import { splitFixedIncome, enrichFunds, fetchTsetmcQuality, fetchEtfDividendEvent, computeBoardQualityScore, faNum, daysBetween, toJalali } from '../lib/fipiran'
 import { fixedIncomeDeclaredRates } from '../data/fixedIncomeDeclaredRates'
 import FundSummary from '../components/FundSummary'
 
@@ -84,7 +84,7 @@ function buildReturnScoreMap(rows) {
   return new Map(rows.map((fund) => [fund.regNo, scoreForYtm(fund.ytmReturn)]))
 }
 
-function applyAccumulatingEtfScore(rows, qData) {
+function applyEtfScore(rows, qData) {
   const returnScores = buildReturnScoreMap(rows)
   return rows.map((fund) => {
     const boardRaw = computeBoardQualityScore(fund, qData[fund.insCode])?.total ?? 0
@@ -112,7 +112,19 @@ function buildColumns(tab) {
     c.name,
     ...(!issuance ? [c.symbol] : []),
     c.size,
-    ...(!dividend ? [c.ytm] : []),
+    ...(!dividend ? [c.return] : []),
+    ...(tab === 'etfDividend' || !dividend ? [c.ytm] : []),
+    ...(tab === 'etfDividend' ? [{
+      key: 'dividendDate',
+      label: 'زمان تقسیم سود',
+      sortVal: (f) => f.dividendDate,
+      exportValue: (f) => f.dividendDate ? toJalali(f.dividendDate) : null,
+      render: (f) => f.dividendDate ? (
+        <span className="text-sm font-dana tabular-nums text-text-primary" style={{ fontWeight: 700 }}>
+          {toJalali(f.dividendDate)}
+        </span>
+      ) : <span className="text-text-muted/40 text-xs">—</span>,
+    }] : []),
     c.declaredRate,
     c.years,
     {
@@ -143,23 +155,26 @@ export default function FixedIncome() {
     etfMarketTypes: [4],
     marketPriceField: 'pDrCotVal',
   })
-  const [tab, setTab] = useState('etfDividend')
+  const [tab, setTab] = useState('etfAccumulating')
   const [qData, setQData] = useState({})
   const [qLoading, setQLoading] = useState(false)
+  const [dividendData, setDividendData] = useState({})
+  const [dividendLoading, setDividendLoading] = useState(false)
 
-  const accumulatingEtfs = useMemo(
-    () => funds.filter((fund) => fund.type === 4 && fund.isETF && fund.dividendDays <= 0 && fund.insCode),
+  const fixedIncomeEtfs = useMemo(
+    () => funds.filter((fund) => fund.type === 4 && fund.isETF && fund.insCode),
     [funds]
   )
+  const dividendEtfs = useMemo(() => fixedIncomeEtfs.filter((fund) => fund.dividendDays > 0), [fixedIncomeEtfs])
 
   useEffect(() => {
-    if (!accumulatingEtfs.length) {
+    if (!fixedIncomeEtfs.length) {
       setQLoading(false)
       return
     }
     let cancelled = false
     setQLoading(true)
-    Promise.all(accumulatingEtfs.map(async (fund) => {
+    Promise.all(fixedIncomeEtfs.map(async (fund) => {
       try {
         return [fund.insCode, await fetchTsetmcQuality(fund.insCode)]
       } catch {
@@ -182,7 +197,33 @@ export default function FixedIncome() {
     return () => {
       cancelled = true
     }
-  }, [accumulatingEtfs])
+  }, [fixedIncomeEtfs])
+
+  useEffect(() => {
+    if (!dividendEtfs.length) {
+      setDividendData({})
+      setDividendLoading(false)
+      return
+    }
+    let cancelled = false
+    setDividendLoading(true)
+    Promise.all(dividendEtfs.map(async (fund) => {
+      try {
+        return [fund.regNo, await fetchEtfDividendEvent(fund, endISO, 'pDrCotVal')]
+      } catch {
+        return [fund.regNo, null]
+      }
+    }))
+      .then((pairs) => {
+        if (!cancelled) setDividendData(Object.fromEntries(pairs.filter(([, data]) => data)))
+      })
+      .finally(() => {
+        if (!cancelled) setDividendLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [dividendEtfs, endISO])
 
   const groups = useMemo(() => {
     const split = splitFixedIncome(funds)
@@ -197,18 +238,22 @@ export default function FixedIncome() {
       }
     })
     const etfAccumulating = addDeclaredAndYtm(split.etfAccumulating)
+    const etfDividend = addDeclaredAndYtm(split.etfDividend).map((fund) => {
+      const event = dividendData[fund.regNo]
+      return event ? { ...fund, ...event, ytmReturn: event.dividendAnnualizedReturn } : { ...fund, ytmReturn: null }
+    })
     return {
-      etfDividend:          addDeclaredAndYtm(split.etfDividend),
-      etfAccumulating:      applyAccumulatingEtfScore(etfAccumulating, qData),
+      etfDividend:          applyEtfScore(etfDividend, qData),
+      etfAccumulating:      applyEtfScore(etfAccumulating, qData),
       issuanceDividend:     addDeclaredAndYtm(split.issuanceDividend),
       issuanceAccumulating: addDeclaredAndYtm(split.issuanceAccumulating),
     }
-  }, [funds, startDate, endDate, startISO, endISO, qData])
+  }, [funds, startDate, endDate, startISO, endISO, qData, dividendData])
 
   const rows = groups[tab]
   const getTabCount = (id) => groups[id]?.length ?? 0
   const dividendTab = tab === 'etfDividend' || tab === 'issuanceDividend'
-  const activeLoading = loading || (tab === 'etfAccumulating' && qLoading)
+  const activeLoading = loading || ((tab === 'etfAccumulating' || tab === 'etfDividend') && qLoading) || (tab === 'etfDividend' && dividendLoading)
   const columns = useMemo(() => buildColumns(tab), [tab])
 
   return (
@@ -256,7 +301,7 @@ export default function FixedIncome() {
       </motion.div>
 
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.1 }}>
-        <FundSummary rows={rows} loading={activeLoading} showReturns={!dividendTab} returnKey="ytmReturn" returnLabel="YTM میانگین" />
+        <FundSummary rows={rows} loading={activeLoading} showReturns={!dividendTab || tab === 'etfDividend'} returnKey="ytmReturn" returnLabel="بازدهی سالانه‌شده میانگین" />
         <FundsTable
           columns={columns}
           rows={rows}

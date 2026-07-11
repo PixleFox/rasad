@@ -332,6 +332,37 @@ async function fetchEtfMarketRangeReturn(fund, startISO, endISO, priceField) {
   }
 }
 
+export async function fetchEtfDividendEvent(fund, endISO, priceField = 'pDrCotVal') {
+  if (!fund?.insCode) return null
+  const dailyList = await fetchTsetmcDailyList(fund.insCode, 120)
+  const endDate = isoToTseDate(endISO)
+  const events = dailyList
+    .filter((row) => row?.dEven <= endDate && Number(row?.[priceField]) > 0 && Number(row?.priceYesterday) > 0)
+    .map((row) => ({
+      date: tseDateToISO(row.dEven),
+      returnPct: (Number(row[priceField]) / Number(row.priceYesterday) - 1) * 100,
+    }))
+    // Small negative ticks are ordinary market noise; monthly payouts create a
+    // materially larger ex-dividend drop in fixed-income ETFs.
+    .filter((event) => event.date && event.returnPct <= -0.5)
+    .sort((a, b) => b.date.localeCompare(a.date))
+
+  const latest = events[0]
+  if (!latest) return null
+  const previous = events[1]
+  const fallbackDays = Number(fund.dividendDays) > 0 ? Number(fund.dividendDays) * (365 / 12) : 365 / 12
+  const intervalDays = previous ? daysBetween(previous.date, latest.date) : fallbackDays
+  const monthlyReturn = Math.abs(latest.returnPct)
+  return {
+    dividendDate: latest.date,
+    dividendPeriodReturn: monthlyReturn,
+    dividendIntervalDays: intervalDays,
+    dividendAnnualizedReturn: intervalDays > 0
+      ? (Math.pow(1 + monthlyReturn / 100, 365 / intervalDays) - 1) * 100
+      : null,
+  }
+}
+
 // ETF premium/discount based exclusively on TSETMC's last trade and redemption NAV.
 export const calculateMarketBubble = (lastTrade, redemptionNav) =>
   Number.isFinite(Number(lastTrade)) && Number(lastTrade) > 0 &&

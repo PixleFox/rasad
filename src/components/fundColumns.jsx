@@ -74,7 +74,7 @@ const COL = {
   symbol: { key: 'symbol', label: 'نماد', render: symbolCell, exportValue: (f) => f.symbol },
   size: { key: 'size', label: 'دارایی (میلیارد تومان)', sortVal: (f) => f.sizeRial, render: sizeCell, exportValue: (f) => Math.round((f.sizeRial || 0) / 1e10) },
   return: { key: 'return', label: 'بازدهی در بازه', sortVal: (f) => f.rangeReturn, render: returnCell, exportValue: (f) => f.rangeReturn },
-  ytm: { key: 'ytm', label: 'YTM بازه', sortVal: (f) => f.ytmReturn, render: ytmCell, exportValue: (f) => f.ytmReturn },
+  ytm: { key: 'ytm', label: 'بازدهی سالانه‌شده', sortVal: (f) => f.ytmReturn, render: ytmCell, exportValue: (f) => f.ytmReturn },
   declaredRate: { key: 'declaredRate', label: 'نرخ اعلامی', sortVal: (f) => f.declaredRate, render: declaredRateCell, exportValue: (f) => f.declaredRate },
   years: { key: 'years', label: 'سابقه', sortVal: (f) => f.years, render: yearsCell, exportValue: (f) => f.years },
   score: { key: 'score', label: 'شاخص رصد', sortVal: (f) => f.rasadScore, render: scoreCell, exportValue: (f) => f.rasadScore },
