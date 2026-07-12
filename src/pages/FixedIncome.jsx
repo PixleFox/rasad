@@ -88,20 +88,20 @@ function buildReturnScoreMap(rows) {
   const validRows = rows
     .filter((fund) => Number.isFinite(fund.ytmReturn))
     .sort((a, b) => b.ytmReturn - a.ytmReturn)
-  const scoreForPercentile = (percentile) => {
-    if (percentile <= 2) return 40
-    if (percentile <= 5) return 30
-    if (percentile <= 10) return 20
-    if (percentile <= 20) return 10
-    if (percentile <= 30) return 5
-    return 0
+  const returnBand = (percentile) => {
+    if (percentile <= 2) return { score: 40, cap: 100 }
+    if (percentile <= 5) return { score: 30, cap: 86 }
+    if (percentile <= 10) return { score: 20, cap: 72 }
+    if (percentile <= 20) return { score: 10, cap: 54 }
+    if (percentile <= 30) return { score: 5, cap: 38 }
+    return { score: 0, cap: 30 }
   }
   const scores = new Map()
   for (let index = 0; index < validRows.length; index += 1) {
     const fund = validRows[index]
     const firstSameIndex = validRows.findIndex((row) => row.ytmReturn === fund.ytmReturn)
     const percentile = ((firstSameIndex + 1) / validRows.length) * 100
-    scores.set(fund.regNo, scoreForPercentile(percentile))
+    scores.set(fund.regNo, returnBand(percentile))
   }
   return scores
 }
@@ -112,16 +112,18 @@ function applyEtfScore(rows, qData) {
     const boardRaw = computeBoardQualityScore(fund, qData[fund.insCode])?.total ?? 0
     const boardScore = Number(((boardRaw / 35) * 25).toFixed(1))
     const reserve = Number(((reserveScore(fund) / 15) * 10).toFixed(1))
-    const ytm = returnScores.get(fund.regNo) ?? 0
+    const ytmBand = returnScores.get(fund.regNo) ?? { score: 0, cap: 30 }
+    const ytm = ytmBand.score
     const history = historyScore(fund.years)
     const aum = aumScore(fund.sizeRial)
     const reservePenalty = negativeReservePenalty(fund)
-    const rasadScore = Math.max(0, Math.min(100, boardScore + reserve + reservePenalty + ytm + history + aum))
+    const rawScore = boardScore + reserve + reservePenalty + ytm + history + aum
+    const rasadScore = Math.max(0, Math.min(100, ytmBand.cap, rawScore))
     return {
       ...fund,
       rasadScore,
       rasadScoreMax: 100,
-      rasadScoreParts: { board: boardScore, reserve, reservePenalty, ytm, history, aum },
+      rasadScoreParts: { board: boardScore, reserve, reservePenalty, ytm, history, aum, ytmCap: ytmBand.cap },
     }
   })
 }
