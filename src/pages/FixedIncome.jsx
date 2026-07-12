@@ -40,6 +40,16 @@ function annualizedYtm(rangeReturn, dayCount) {
   return (Math.pow(1 + rangeReturn / 100, 365 / dayCount) - 1) * 100
 }
 
+const percentCell = (value) => {
+  if (!Number.isFinite(value)) return <span className="text-text-muted/40 text-xs">—</span>
+  const color = value >= 0 ? '#00FF9D' : '#FF3B6B'
+  return (
+    <span className="text-sm font-dana tabular-nums" style={{ fontWeight: 900, color, textShadow: `0 0 10px ${color}40` }}>
+      {faNum(value.toFixed(1))}٪
+    </span>
+  )
+}
+
 function reserveScore(fund) {
   const aumBT = fund.sizeRial > 0 ? fund.sizeRial / 1e10 : null
   if (!Number.isFinite(fund.reserve) || !aumBT) return 0
@@ -108,12 +118,20 @@ function buildColumns(tab) {
   const c = fixedIncomeColumnParts
   const dividend = tab === 'etfDividend' || tab === 'issuanceDividend'
   const issuance = tab === 'issuanceDividend' || tab === 'issuanceAccumulating'
+  const oneYearReturnColumn = {
+    key: 'oneYearReturn',
+    label: 'بازدهی یک‌ساله',
+    sortVal: (f) => f.oneYearReturn,
+    exportValue: (f) => f.oneYearReturn,
+    render: (f) => percentCell(f.oneYearReturn),
+  }
   return [
     c.name,
     ...(!issuance ? [c.symbol] : []),
     c.size,
     ...(!dividend ? [c.return] : []),
     ...(tab === 'etfDividend' || !dividend ? [c.ytm] : []),
+    ...(tab === 'issuanceDividend' ? [oneYearReturnColumn] : []),
     ...(tab === 'etfDividend' ? [{
       key: 'dividendDate',
       label: 'زمان تقسیم سود',
@@ -234,6 +252,7 @@ export default function FixedIncome() {
         ...fund,
         declaredRate: declared?.declaredRate ?? null,
         declaredRateUpdatedAt: declared?.updatedAt ?? null,
+        oneYearReturn: declared?.oneYearReturn ?? null,
         ytmReturn: annualizedYtm(fund.rangeReturn, dayCount),
       }
     })
@@ -314,7 +333,7 @@ export default function FixedIncome() {
           goodSortKeys={['score', 'ytm', 'size', 'years', 'reserve', 'declaredRate']}
           rowKey={(row) => row.id ?? row.regNo}
           exportFileName="fixed-income-funds"
-          defaultHiddenColumnKeys={['years', '__dollarValue']}
+          defaultHiddenColumnKeys={['years', '__dollarValue', 'declaredRate']}
         />
       </motion.div>
 
