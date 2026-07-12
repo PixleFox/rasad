@@ -252,7 +252,6 @@ export default function FixedIncome() {
         ...fund,
         declaredRate: declared?.declaredRate ?? null,
         declaredRateUpdatedAt: declared?.updatedAt ?? null,
-        oneYearReturn: declared?.oneYearReturn ?? null,
         ytmReturn: annualizedYtm(fund.rangeReturn, dayCount),
       }
     })

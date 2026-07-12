@@ -135,6 +135,7 @@ function normalize(it) {
     statNav: Number(it.statisticalNav) || 0,
     cancelNav: Number(it.cancelNav) || 0,
     issueNav: Number(it.issueNav) || 0,
+    oneYearReturn: Number.isFinite(Number(it.annualEfficiency)) ? Number(it.annualEfficiency) : null,
     // Classification
     isETF: it.typeOfInvest === 'Negotiable',
     dividendDays: Number(it.dividendIntervalPeriod) || 0,
