@@ -128,6 +128,48 @@ function applyEtfScore(rows, qData) {
   })
 }
 
+function buildOneYearReturnScoreMap(rows) {
+  const validRows = rows
+    .filter((fund) => Number.isFinite(fund.oneYearReturn))
+    .sort((a, b) => b.oneYearReturn - a.oneYearReturn)
+  const returnBand = (percentile) => {
+    if (percentile <= 2) return { score: 55, cap: 100 }
+    if (percentile <= 5) return { score: 42, cap: 85 }
+    if (percentile <= 10) return { score: 28, cap: 68 }
+    if (percentile <= 20) return { score: 12, cap: 48 }
+    if (percentile <= 30) return { score: 5, cap: 35 }
+    return { score: 0, cap: 28 }
+  }
+  const scores = new Map()
+  for (let index = 0; index < validRows.length; index += 1) {
+    const fund = validRows[index]
+    const firstSameIndex = validRows.findIndex((row) => row.oneYearReturn === fund.oneYearReturn)
+    const percentile = ((firstSameIndex + 1) / validRows.length) * 100
+    scores.set(fund.regNo, returnBand(percentile))
+  }
+  return scores
+}
+
+function applyIssuanceDividendScore(rows) {
+  const returnScores = buildOneYearReturnScoreMap(rows)
+  return rows.map((fund) => {
+    const returnBand = returnScores.get(fund.regNo) ?? { score: 0, cap: 28 }
+    const oneYearReturn = returnBand.score
+    const aum = aumScore(fund.sizeRial)
+    const reserve = Number(((reserveScore(fund) / 15) * 20).toFixed(1))
+    const history = historyScore(fund.years)
+    const reservePenalty = negativeReservePenalty(fund)
+    const rawScore = oneYearReturn + aum + reserve + history + reservePenalty
+    const rasadScore = Math.max(0, Math.min(100, returnBand.cap, rawScore))
+    return {
+      ...fund,
+      rasadScore,
+      rasadScoreMax: 100,
+      rasadScoreParts: { oneYearReturn, aum, reserve, history, reservePenalty, returnCap: returnBand.cap },
+    }
+  })
+}
+
 function buildColumns(tab) {
   const c = fixedIncomeColumnParts
   const dividend = tab === 'etfDividend' || tab === 'issuanceDividend'
@@ -277,7 +319,7 @@ export default function FixedIncome() {
     return {
       etfDividend:          applyEtfScore(etfDividend, qData),
       etfAccumulating:      applyEtfScore(etfAccumulating, qData),
-      issuanceDividend:     addDeclaredAndYtm(split.issuanceDividend),
+      issuanceDividend:     applyIssuanceDividendScore(addDeclaredAndYtm(split.issuanceDividend)),
       issuanceAccumulating: addDeclaredAndYtm(split.issuanceAccumulating),
     }
   }, [funds, startDate, endDate, startISO, endISO, qData, dividendData])
