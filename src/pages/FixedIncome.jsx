@@ -85,29 +85,36 @@ function aumScore(sizeRial) {
 }
 
 function buildReturnScoreMap(rows) {
-  const validReturns = rows
-    .map((fund) => fund.ytmReturn)
-    .filter((ytmReturn) => Number.isFinite(ytmReturn) && ytmReturn > 32)
-  const maxYtm = validReturns.length ? Math.max(...validReturns) : null
-  const scoreForYtm = (ytmReturn) => {
-    if (!Number.isFinite(ytmReturn) || !Number.isFinite(maxYtm)) return 0
-    if (ytmReturn <= 32) return 0
-    const gapFromBest = Math.max(0, maxYtm - ytmReturn)
-    const score = 60 * Math.exp(-0.62 * Math.pow(gapFromBest, 1.35))
-    return Number(Math.max(0, Math.min(60, score)).toFixed(1))
+  const validRows = rows
+    .filter((fund) => Number.isFinite(fund.ytmReturn))
+    .sort((a, b) => b.ytmReturn - a.ytmReturn)
+  const scoreForPercentile = (percentile) => {
+    if (percentile <= 2) return 40
+    if (percentile <= 5) return 30
+    if (percentile <= 10) return 20
+    if (percentile <= 20) return 10
+    if (percentile <= 30) return 5
+    return 0
   }
-  return new Map(rows.map((fund) => [fund.regNo, scoreForYtm(fund.ytmReturn)]))
+  const scores = new Map()
+  for (let index = 0; index < validRows.length; index += 1) {
+    const fund = validRows[index]
+    const firstSameIndex = validRows.findIndex((row) => row.ytmReturn === fund.ytmReturn)
+    const percentile = ((firstSameIndex + 1) / validRows.length) * 100
+    scores.set(fund.regNo, scoreForPercentile(percentile))
+  }
+  return scores
 }
 
 function applyEtfScore(rows, qData) {
   const returnScores = buildReturnScoreMap(rows)
   return rows.map((fund) => {
     const boardRaw = computeBoardQualityScore(fund, qData[fund.insCode])?.total ?? 0
-    const boardScore = Number(((boardRaw / 35) * 18).toFixed(1))
-    const reserve = Number(((reserveScore(fund) / 15) * 7).toFixed(1))
+    const boardScore = Number(((boardRaw / 35) * 25).toFixed(1))
+    const reserve = Number(((reserveScore(fund) / 15) * 10).toFixed(1))
     const ytm = returnScores.get(fund.regNo) ?? 0
-    const history = Number(((historyScore(fund.years) / 5) * 3).toFixed(1))
-    const aum = Number(((aumScore(fund.sizeRial) / 20) * 12).toFixed(1))
+    const history = historyScore(fund.years)
+    const aum = aumScore(fund.sizeRial)
     const reservePenalty = negativeReservePenalty(fund)
     const rasadScore = Math.max(0, Math.min(100, boardScore + reserve + reservePenalty + ytm + history + aum))
     return {
