@@ -314,6 +314,7 @@ export default function FixedIncome() {
           goodSortKeys={['score', 'ytm', 'size', 'years', 'reserve', 'declaredRate']}
           rowKey={(row) => row.id ?? row.regNo}
           exportFileName="fixed-income-funds"
+          defaultHiddenColumnKeys={['years', '__dollarValue']}
         />
       </motion.div>
 

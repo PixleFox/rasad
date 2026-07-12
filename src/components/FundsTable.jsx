@@ -1,6 +1,6 @@
-import { useState, useMemo } from 'react'
-import { Download, Search, ChevronDown, ChevronUp } from 'lucide-react'
-import { useSearchParams } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { Download, Search, ChevronDown, ChevronUp, Settings2, Eye, EyeOff, GripVertical, RotateCcw, X } from 'lucide-react'
+import { useLocation, useSearchParams } from 'react-router-dom'
 import { exportRowsToCsv } from '../lib/tableExport'
 import PhoneCaptureModal from './PhoneCaptureModal'
 import { getSavedExportPhone, recordExportLead, saveExportPhone } from '../lib/exportLeads'
@@ -32,13 +32,19 @@ export default function FundsTable({
   exportEnabled = true,
   searchable = true,
   searchPlaceholder = 'جستجو در جدول...',
+  customizeColumns = true,
+  defaultHiddenColumnKeys = [],
 }) {
   const [sortKey, setSortKey] = useState(defaultSortKey ?? null)
   const [sortDir, setSortDir] = useState(defaultSortDir)
   const [searchParams] = useSearchParams()
+  const location = useLocation()
   const [query, setQuery] = useState(() => searchParams.get('q') || '')
   const [phoneModalOpen, setPhoneModalOpen] = useState(false)
   const [exportBusy, setExportBusy] = useState(false)
+  const [customizerOpen, setCustomizerOpen] = useState(false)
+  const [columnPrefs, setColumnPrefs] = useState(null)
+  const [draggedKey, setDraggedKey] = useState(null)
   const exchangeRate = useExchangeRate()
 
   const getMedal = (row, i) => {
@@ -57,45 +63,6 @@ export default function FundsTable({
     return row[rankField] >= 1 && row[rankField] <= 3
       ? { background: tints[row[rankField] - 1] }
       : {}
-  }
-
-  const filteredRows = useMemo(() => {
-    const normalized = query.trim().toLowerCase()
-    if (!searchable || !normalized) return rows
-    return rows.filter((row) => {
-      const values = columns.flatMap((col) => {
-        const exported = col.exportValue?.(row)
-        return [exported, row[col.key]]
-      })
-      return values
-        .filter((value) => value != null)
-        .join(' ')
-        .toLowerCase()
-        .includes(normalized)
-    })
-  }, [rows, columns, query, searchable])
-
-  const sorted = useMemo(() => {
-    if (!sortKey) return filteredRows
-    const col = columns.find((c) => c.key === sortKey)
-    if (!col?.sortVal) return filteredRows
-    const dir = sortDir === 'asc' ? 1 : -1
-    return [...filteredRows].sort((a, b) => {
-      const va = col.sortVal(a)
-      const vb = col.sortVal(b)
-      if (va == null) return 1
-      if (vb == null) return -1
-      return (va - vb) * dir
-    })
-  }, [filteredRows, sortKey, sortDir, columns])
-
-  const toggleSort = (col) => {
-    if (!col.sortVal) return
-    if (sortKey === col.key) setSortDir((d) => (d === 'desc' ? 'asc' : 'desc'))
-    else {
-      setSortKey(col.key)
-      setSortDir('desc')
-    }
   }
 
   // Rank column injected as first column
@@ -124,6 +91,121 @@ export default function FundsTable({
   const siteColumn = columns.find((col) => col.key === 'site')
   const columnsBeforeSite = siteColumn ? columns.filter((col) => col.key !== 'site') : columns
   const allColumns = [rankCol, ...columnsBeforeSite, ...(hasFundAum ? [dollarColumn] : []), ...(siteColumn ? [siteColumn] : [])]
+  const columnKeySignature = allColumns.map((col) => col.key).join('|')
+  const defaultHiddenSignature = defaultHiddenColumnKeys.join('|')
+  const customizerEnabled = customizeColumns && location.pathname !== '/'
+  const storageKey = `rasad:table-columns:${location.pathname}:${exportFileName}:${columnKeySignature}`
+
+  const buildDefaultPrefs = () => {
+    const hidden = new Set(defaultHiddenColumnKeys)
+    return allColumns.map((col) => ({ key: col.key, visible: !hidden.has(col.key) }))
+  }
+  const reconcilePrefs = (savedPrefs) => {
+    const defaults = buildDefaultPrefs()
+    const available = new Set(defaults.map((item) => item.key))
+    const defaultByKey = new Map(defaults.map((item) => [item.key, item]))
+    const saved = Array.isArray(savedPrefs) ? savedPrefs : []
+    const savedItems = saved
+      .filter((item) => available.has(item?.key))
+      .map((item) => ({ key: item.key, visible: Boolean(item.visible) }))
+    const savedKeys = new Set(savedItems.map((item) => item.key))
+    const next = [
+      ...savedItems,
+      ...defaults.filter((item) => !savedKeys.has(item.key)),
+    ].map((item) => ({
+      key: item.key,
+      visible: item.visible ?? defaultByKey.get(item.key)?.visible ?? true,
+    }))
+    return next.some((item) => item.visible)
+      ? next
+      : next.map((item, index) => ({ ...item, visible: index === 0 }))
+  }
+
+  useEffect(() => {
+    if (!customizerEnabled) {
+      setColumnPrefs(null)
+      return
+    }
+    try {
+      const saved = window.localStorage.getItem(storageKey)
+      setColumnPrefs(reconcilePrefs(saved ? JSON.parse(saved) : null))
+    } catch {
+      setColumnPrefs(reconcilePrefs(null))
+    }
+  }, [customizerEnabled, storageKey, columnKeySignature, defaultHiddenSignature])
+
+  const savePrefs = (next) => {
+    setColumnPrefs(next)
+    try {
+      window.localStorage.setItem(storageKey, JSON.stringify(next))
+    } catch {
+      // Local storage may be unavailable in private browsing; the live state still works.
+    }
+  }
+
+  const prefs = columnPrefs || buildDefaultPrefs()
+  const columnsByKey = new Map(allColumns.map((col) => [col.key, col]))
+  const visibleColumns = customizerEnabled
+    ? prefs.filter((item) => item.visible).map((item) => columnsByKey.get(item.key)).filter(Boolean)
+    : allColumns
+  const customizerItems = prefs.map((item) => ({ ...item, column: columnsByKey.get(item.key) })).filter((item) => item.column)
+  const visibleCount = customizerItems.filter((item) => item.visible).length
+  const moveColumn = (fromKey, toKey) => {
+    if (!fromKey || !toKey || fromKey === toKey) return
+    const fromIndex = prefs.findIndex((item) => item.key === fromKey)
+    const toIndex = prefs.findIndex((item) => item.key === toKey)
+    if (fromIndex < 0 || toIndex < 0) return
+    const next = [...prefs]
+    const [moved] = next.splice(fromIndex, 1)
+    next.splice(toIndex, 0, moved)
+    savePrefs(next)
+  }
+  const toggleColumn = (key) => {
+    const item = prefs.find((entry) => entry.key === key)
+    if (!item || (item.visible && visibleCount <= 1)) return
+    savePrefs(prefs.map((entry) => entry.key === key ? { ...entry, visible: !entry.visible } : entry))
+  }
+  const resetColumns = () => savePrefs(buildDefaultPrefs())
+
+  const filteredRows = useMemo(() => {
+    const normalized = query.trim().toLowerCase()
+    if (!searchable || !normalized) return rows
+    return rows.filter((row) => {
+      const values = visibleColumns.flatMap((col) => {
+        const exported = col.exportValue?.(row)
+        return [exported, row[col.key]]
+      })
+      return values
+        .filter((value) => value != null)
+        .join(' ')
+        .toLowerCase()
+        .includes(normalized)
+    })
+  }, [rows, visibleColumns, query, searchable])
+
+  const sorted = useMemo(() => {
+    if (!sortKey) return filteredRows
+    const col = visibleColumns.find((c) => c.key === sortKey)
+    if (!col?.sortVal) return filteredRows
+    const dir = sortDir === 'asc' ? 1 : -1
+    return [...filteredRows].sort((a, b) => {
+      const va = col.sortVal(a)
+      const vb = col.sortVal(b)
+      if (va == null) return 1
+      if (vb == null) return -1
+      return (va - vb) * dir
+    })
+  }, [filteredRows, sortKey, sortDir, visibleColumns])
+
+  const toggleSort = (col) => {
+    if (!col.sortVal) return
+    if (sortKey === col.key) setSortDir((d) => (d === 'desc' ? 'asc' : 'desc'))
+    else {
+      setSortKey(col.key)
+      setSortDir('desc')
+    }
+  }
+
   const exportColumns = allColumns.map((col) => ({
     ...col,
     exportValue: col.exportValue || ((row, i) => {
@@ -132,7 +214,7 @@ export default function FundsTable({
       if (value == null && col.sortVal) return col.sortVal(row)
       return value
     }),
-  }))
+  })).filter((col) => visibleColumns.some((visible) => visible.key === col.key))
   const canExport = exportEnabled && !loading && !error && sorted.length > 0
   const finishExport = async (phone) => {
     setExportBusy(true)
@@ -161,22 +243,38 @@ export default function FundsTable({
         onClose={() => setPhoneModalOpen(false)}
         onSubmit={(phone) => finishExport(saveExportPhone(phone))}
       />
-      {(exportEnabled || searchable) && (
-        <div className="flex flex-col gap-2 px-3 py-2 border-b border-neon-cyan/10 sm:flex-row sm:items-center sm:justify-between" dir="ltr">
-          {exportEnabled && (
-          <button
-            type="button"
-            onClick={handleExport}
-            disabled={!canExport}
-            className="inline-flex items-center gap-2 rounded-lg border border-neon-green/30 bg-neon-green/10 px-3 py-1.5 text-xs font-dana text-neon-green transition-colors hover:border-neon-green/60 hover:bg-neon-green/15 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/5 disabled:text-text-muted/50"
-            style={{ fontWeight: 700 }}
-            title="خروجی اکسل"
-            dir="rtl"
-          >
-            <Download size={15} aria-hidden="true" />
-            خروجی اکسل
-          </button>
-          )}
+      {(exportEnabled || searchable || customizerEnabled) && (
+        <div className="relative flex flex-col gap-2 px-3 py-2 border-b border-neon-cyan/10 sm:flex-row sm:items-center sm:justify-between" dir="ltr">
+          <div className="flex items-center gap-2" dir="rtl">
+            {exportEnabled && (
+              <button
+                type="button"
+                onClick={handleExport}
+                disabled={!canExport}
+                className="inline-flex items-center gap-2 rounded-lg border border-neon-green/30 bg-neon-green/10 px-3 py-1.5 text-xs font-dana text-neon-green transition-colors hover:border-neon-green/60 hover:bg-neon-green/15 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/5 disabled:text-text-muted/50"
+                style={{ fontWeight: 700 }}
+                title="خروجی اکسل"
+              >
+                <Download size={15} aria-hidden="true" />
+                خروجی اکسل
+              </button>
+            )}
+            {customizerEnabled && (
+              <button
+                type="button"
+                onClick={() => setCustomizerOpen((open) => !open)}
+                className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border transition-all ${
+                  customizerOpen
+                    ? 'border-neon-cyan/60 bg-neon-cyan/15 text-neon-cyan shadow-[0_0_18px_rgba(0,212,255,0.18)]'
+                    : 'border-neon-cyan/20 bg-space/45 text-text-muted hover:border-neon-cyan/50 hover:text-neon-cyan'
+                }`}
+                title="شخصی‌سازی ستون‌ها"
+                aria-label="شخصی‌سازی ستون‌ها"
+              >
+                <Settings2 size={16} aria-hidden="true" />
+              </button>
+            )}
+          </div>
           {searchable && (
             <label className="relative flex-1 sm:max-w-xs" dir="rtl">
               <Search size={15} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-text-muted/70" />
@@ -189,6 +287,73 @@ export default function FundsTable({
               />
             </label>
           )}
+          {customizerEnabled && customizerOpen && (
+            <div
+              className="absolute left-3 top-12 z-30 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-neon-cyan/20 bg-[#08111f]/95 shadow-2xl shadow-black/40 backdrop-blur-xl"
+              dir="rtl"
+            >
+              <div className="flex items-center justify-between border-b border-neon-cyan/10 px-3 py-2">
+                <div>
+                  <p className="text-xs font-dana text-text-primary" style={{ fontWeight: 900 }}>شخصی‌سازی جدول</p>
+                  <p className="mt-0.5 text-[0.62rem] font-dana text-text-muted/70" style={{ fontWeight: 600 }}>ستون‌ها را بکش، مخفی کن، یا برگردان.</p>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={resetColumns}
+                    className="grid h-7 w-7 place-items-center rounded-md text-text-muted transition-colors hover:bg-white/5 hover:text-neon-cyan"
+                    title="بازنشانی"
+                    aria-label="بازنشانی ستون‌ها"
+                  >
+                    <RotateCcw size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCustomizerOpen(false)}
+                    className="grid h-7 w-7 place-items-center rounded-md text-text-muted transition-colors hover:bg-white/5 hover:text-neon-pink"
+                    title="بستن"
+                    aria-label="بستن"
+                  >
+                    <X size={15} />
+                  </button>
+                </div>
+              </div>
+              <div className="max-h-80 space-y-1 overflow-y-auto p-2">
+                {customizerItems.map((item) => (
+                  <div
+                    key={item.key}
+                    draggable
+                    onDragStart={() => setDraggedKey(item.key)}
+                    onDragOver={(event) => event.preventDefault()}
+                    onDrop={() => {
+                      moveColumn(draggedKey, item.key)
+                      setDraggedKey(null)
+                    }}
+                    onDragEnd={() => setDraggedKey(null)}
+                    className={`flex items-center gap-2 rounded-lg border px-2 py-2 transition-all ${
+                      item.visible
+                        ? 'border-white/10 bg-white/[0.035] text-text-primary'
+                        : 'border-white/5 bg-white/[0.015] text-text-muted/45'
+                    } ${draggedKey === item.key ? 'scale-[0.99] border-neon-cyan/50 opacity-70' : ''}`}
+                  >
+                    <GripVertical size={15} className="shrink-0 cursor-grab text-text-muted/60" aria-hidden="true" />
+                    <button
+                      type="button"
+                      onClick={() => toggleColumn(item.key)}
+                      className={`grid h-7 w-7 shrink-0 place-items-center rounded-md transition-colors ${
+                        item.visible ? 'text-neon-cyan hover:bg-neon-cyan/10' : 'text-text-muted/45 hover:bg-white/5 hover:text-text-muted'
+                      }`}
+                      title={item.visible ? 'مخفی کردن ستون' : 'نمایش ستون'}
+                      aria-label={item.visible ? 'مخفی کردن ستون' : 'نمایش ستون'}
+                    >
+                      {item.visible ? <Eye size={15} /> : <EyeOff size={15} />}
+                    </button>
+                    <span className="min-w-0 flex-1 truncate text-xs font-dana" style={{ fontWeight: 700 }}>{item.column.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
       <div className="overflow-x-auto">
@@ -198,7 +363,7 @@ export default function FundsTable({
               className="text-xs font-dana text-text-muted"
               style={{ background: 'linear-gradient(135deg, rgba(0,212,255,0.05), rgba(124,58,237,0.05))' }}
             >
-              {allColumns.map((col) => (
+              {visibleColumns.map((col) => (
                 <th
                   key={col.key}
                   onClick={() => toggleSort(col)}
@@ -223,7 +388,7 @@ export default function FundsTable({
             {loading ? (
               Array.from({ length: 8 }).map((_, i) => (
                 <tr key={i} className="border-t border-neon-cyan/5">
-                  {allColumns.map((col) => (
+                  {visibleColumns.map((col) => (
                     <td key={col.key} className="py-4 px-3">
                       <div className="h-3.5 w-full max-w-[90px] mx-auto rounded bg-white/5 animate-pulse" />
                     </td>
@@ -232,7 +397,7 @@ export default function FundsTable({
               ))
             ) : error ? (
               <tr>
-                <td colSpan={allColumns.length} className="py-16 text-center">
+                <td colSpan={visibleColumns.length} className="py-16 text-center">
                   <p className="text-neon-pink text-sm font-dana mb-2" style={{ fontWeight: 600 }}>{error}</p>
                   {onRetry && (
                     <button onClick={onRetry} className="text-neon-cyan text-sm font-dana cursor-pointer hover:text-white" style={{ fontWeight: 600 }}>
@@ -243,7 +408,7 @@ export default function FundsTable({
               </tr>
             ) : sorted.length === 0 ? (
               <tr>
-                <td colSpan={allColumns.length} className="py-16 text-center text-text-muted text-sm font-dana" style={{ fontWeight: 600 }}>
+                <td colSpan={visibleColumns.length} className="py-16 text-center text-text-muted text-sm font-dana" style={{ fontWeight: 600 }}>
                   {query.trim() ? 'نتیجه‌ای برای جستجو پیدا نشد.' : emptyText || 'صندوقی یافت نشد.'}
                 </td>
               </tr>
@@ -254,7 +419,7 @@ export default function FundsTable({
                   className="border-t border-neon-cyan/5 hover:bg-neon-cyan/5 transition-colors duration-150"
                   style={getRowStyle(row)}
                 >
-                  {allColumns.map((col) => (
+                  {visibleColumns.map((col) => (
                     <td
                       key={col.key}
                       className={`py-4 px-3 ${col.align === 'start' ? 'text-right' : 'text-center'} ${col.tdClass || ''}`}
