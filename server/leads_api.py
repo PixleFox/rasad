@@ -70,6 +70,12 @@ def connect():
         fetched_at TEXT NOT NULL
       );
       CREATE INDEX IF NOT EXISTS exchange_rates_symbol_fetched_idx ON exchange_rates(symbol, fetched_at DESC);
+      CREATE TABLE IF NOT EXISTS tsetmc_quality_cache (
+        ins_code TEXT PRIMARY KEY,
+        quality_json TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS tsetmc_quality_cache_updated_idx ON tsetmc_quality_cache(updated_at DESC);
     ''')
     return db
 
@@ -91,6 +97,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         if self.path == '/api/risk-assessments':
             return self.save_risk_assessment()
+        if self.path == '/api/tsetmc-quality-cache':
+            return self.save_tsetmc_quality_cache()
         if self.path != '/api/export-leads':
             return self.send_json(404, {'error': 'not found'})
         try:
@@ -146,6 +154,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.get_trigger_baseline()
         if parsed.path == '/api/exchange-rate':
             return self.get_exchange_rate()
+        if parsed.path == '/api/tsetmc-quality-cache':
+            return self.get_tsetmc_quality_cache(parse_qs(parsed.query))
         if parsed.path == '/api/risk-assessments/admin':
             return self.get_risk_assessments()
         if parsed.path != '/api/export-leads/admin':
@@ -163,6 +173,49 @@ class Handler(BaseHTTPRequestHandler):
               GROUP BY u.id ORDER BY u.created_at DESC
             ''').fetchall()
         self.send_json(200, {'rows': [dict(row) for row in rows]})
+
+    def get_tsetmc_quality_cache(self, query):
+        ins_code = str((query.get('insCode') or [''])[0]).strip()
+        if not re.fullmatch(r'\d{5,32}', ins_code):
+            return self.send_json(400, {'error': 'invalid insCode'})
+        with connect() as db:
+            row = db.execute(
+                'SELECT quality_json, updated_at FROM tsetmc_quality_cache WHERE ins_code=?',
+                (ins_code,),
+            ).fetchone()
+        if not row:
+            return self.send_json(404, {'error': 'not found'})
+        return self.send_json(200, {'quality': json.loads(row['quality_json']), 'updatedAt': row['updated_at']})
+
+    def save_tsetmc_quality_cache(self):
+        try:
+            length = min(int(self.headers.get('Content-Length', '0')), 32768)
+            data = json.loads(self.rfile.read(length))
+            ins_code = str(data.get('insCode', '')).strip()
+            quality = data.get('quality')
+            if not re.fullmatch(r'\d{5,32}', ins_code) or not isinstance(quality, dict):
+                return self.send_json(400, {'error': 'invalid payload'})
+            # Keep only the board-quality fields used by the frontend.
+            allowed = {
+                'pClose', 'pLastTrade', 'pRedTran', 'bubblePct', 'pYest', 'changePct',
+                'trades', 'volume', 'avgMonthVol', 'mmVolBT', 'issuedUnits',
+                'netFlowBT', 'avgDailyTrades'
+            }
+            clean = {key: quality.get(key) for key in allowed if quality.get(key) is not None}
+            if not clean or (not clean.get('mmVolBT') and clean.get('changePct') is None):
+                return self.send_json(400, {'error': 'empty quality'})
+            now = datetime.now(timezone.utc).isoformat()
+            with connect() as db:
+                db.execute('''
+                  INSERT INTO tsetmc_quality_cache(ins_code, quality_json, updated_at)
+                  VALUES (?, ?, ?)
+                  ON CONFLICT(ins_code) DO UPDATE SET
+                    quality_json=excluded.quality_json,
+                    updated_at=excluded.updated_at
+                ''', (ins_code, json.dumps(clean, ensure_ascii=False, separators=(',', ':')), now))
+            return self.send_json(200, {'ok': True, 'updatedAt': now})
+        except Exception:
+            return self.send_json(500, {'error': 'server error'})
 
     def get_fund_compare(self, query):
         requested_day = str((query.get('date') or [''])[0])

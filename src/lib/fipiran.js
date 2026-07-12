@@ -166,6 +166,44 @@ async function _fetchTsetmc(path) {
   return data
 }
 
+const isPositiveNumber = (value) => Number.isFinite(Number(value)) && Number(value) > 0
+
+const readServerQualityCache = async (insCode) => {
+  try {
+    const response = await fetch(`/api/tsetmc-quality-cache?insCode=${encodeURIComponent(insCode)}`)
+    if (!response.ok) return null
+    const data = await response.json()
+    return data.quality || null
+  } catch {
+    return null
+  }
+}
+
+const writeServerQualityCache = (insCode, quality) => {
+  try {
+    fetch('/api/tsetmc-quality-cache', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ insCode, quality }),
+      keepalive: true,
+    }).catch(() => {})
+  } catch {}
+}
+
+const mergeWithCachedQuality = (current, cached) => {
+  if (!cached) return current
+  return {
+    ...current,
+    mmVolBT: isPositiveNumber(current.mmVolBT) ? current.mmVolBT : cached.mmVolBT ?? current.mmVolBT,
+    changePct: Number.isFinite(Number(current.changePct)) ? current.changePct : cached.changePct ?? current.changePct,
+    trades: isPositiveNumber(current.trades) ? current.trades : cached.trades ?? current.trades,
+    volume: isPositiveNumber(current.volume) ? current.volume : cached.volume ?? current.volume,
+    pClose: isPositiveNumber(current.pClose) ? current.pClose : cached.pClose ?? current.pClose,
+    pLastTrade: isPositiveNumber(current.pLastTrade) ? current.pLastTrade : cached.pLastTrade ?? current.pLastTrade,
+    pYest: isPositiveNumber(current.pYest) ? current.pYest : cached.pYest ?? current.pYest,
+  }
+}
+
 export async function fetchTsetmcQuality(insCode) {
   const [price, fund, info, limits, daily] = await Promise.all([
     _fetchTsetmc(`ClosingPrice/GetClosingPriceInfo/${insCode}`),
@@ -206,17 +244,23 @@ export async function fetchTsetmcQuality(insCode) {
   } catch {}
 
   const dailyList = Array.isArray(daily.closingPriceDaily) ? daily.closingPriceDaily : []
+  const latestDaily = [...dailyList]
+    .filter((row) => Number(row?.pClosing) > 0 && Number(row?.priceYesterday) > 0)
+    .sort((a, b) => b.dEven - a.dEven)[0]
+  const stableChangePct = changePct ?? (latestDaily
+    ? ((Number(latestDaily.pClosing) - Number(latestDaily.priceYesterday)) / Number(latestDaily.priceYesterday)) * 100
+    : null)
   const avgDailyTrades = dailyList.length > 0
     ? dailyList.reduce((s, d) => s + (d.zTotTran ?? 0), 0) / dailyList.length
     : null
 
-  return {
+  const currentQuality = {
     pClose,
     pLastTrade,
     pRedTran,
     bubblePct,
     pYest,
-    changePct,
+    changePct: stableChangePct,
     trades:         cp?.zTotTran       ?? null,
     volume:         cp?.qTotTran5J     ?? null,
     avgMonthVol:    inf?.qTotTran5JAvg ?? null,
@@ -225,6 +269,13 @@ export async function fetchTsetmcQuality(insCode) {
     netFlowBT,
     avgDailyTrades,
   }
+  const isLiveBoardValid = isPositiveNumber(currentQuality.mmVolBT) && Number.isFinite(Number(currentQuality.changePct))
+  if (isLiveBoardValid) {
+    writeServerQualityCache(insCode, currentQuality)
+    return currentQuality
+  }
+  const cachedQuality = await readServerQualityCache(insCode)
+  return mergeWithCachedQuality(currentQuality, cachedQuality)
 }
 
 export function scoreBoardMarketMaker(mmVolBT, sizeRial) {

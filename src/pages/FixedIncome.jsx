@@ -87,9 +87,9 @@ function aumScore(sizeRial) {
 function buildReturnScoreMap(rows) {
   const scoreForYtm = (ytmReturn) => {
     if (!Number.isFinite(ytmReturn)) return 0
-    if (ytmReturn <= 30) return 0
-    const strength = Math.min(1, (ytmReturn - 30) / 12)
-    return Number((40 * Math.pow(strength, 1.1)).toFixed(1))
+    if (ytmReturn <= 32) return 0
+    const strength = Math.min(1, (ytmReturn - 32) / 10)
+    return Number((50 * Math.pow(strength, 0.85)).toFixed(1))
   }
   return new Map(rows.map((fund) => [fund.regNo, scoreForYtm(fund.ytmReturn)]))
 }
@@ -99,10 +99,10 @@ function applyEtfScore(rows, qData) {
   return rows.map((fund) => {
     const boardRaw = computeBoardQualityScore(fund, qData[fund.insCode])?.total ?? 0
     const boardScore = Number(((boardRaw / 35) * 20).toFixed(1))
-    const reserve = reserveScore(fund)
+    const reserve = Number(((reserveScore(fund) / 15) * 10).toFixed(1))
     const ytm = returnScores.get(fund.regNo) ?? 0
     const history = historyScore(fund.years)
-    const aum = aumScore(fund.sizeRial)
+    const aum = Number(((aumScore(fund.sizeRial) / 20) * 15).toFixed(1))
     const reservePenalty = negativeReservePenalty(fund)
     const rasadScore = Math.max(0, Math.min(100, boardScore + reserve + reservePenalty + ytm + history + aum))
     return {
