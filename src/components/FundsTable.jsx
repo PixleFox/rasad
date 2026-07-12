@@ -12,6 +12,9 @@ const MEDAL = {
   2: { icon: '🥉', color: '#CD7F32', shadow: '#CD7F3260' },
 }
 
+const CUSTOMIZER_TUTORIAL_KEY = 'rasad:table-customizer-tutorial:seen'
+let customizerTutorialTimerActive = false
+
 // Generic dark-neon data table.
 // columns: [{ key, label, align?, sortVal?(row), render(row), thClass?, tdClass? }]
 // goodSortKeys: sort keys where higher value = better (shows medals for top 3 when sorted desc)
@@ -45,6 +48,7 @@ export default function FundsTable({
   const [customizerOpen, setCustomizerOpen] = useState(false)
   const [columnPrefs, setColumnPrefs] = useState(null)
   const [draggedKey, setDraggedKey] = useState(null)
+  const [tutorialOpen, setTutorialOpen] = useState(false)
   const exchangeRate = useExchangeRate()
 
   const getMedal = (row, i) => {
@@ -95,6 +99,14 @@ export default function FundsTable({
   const defaultHiddenSignature = defaultHiddenColumnKeys.join('|')
   const customizerEnabled = customizeColumns && location.pathname !== '/'
   const storageKey = `rasad:table-columns:${location.pathname}:${exportFileName}:${columnKeySignature}`
+  const markTutorialSeen = () => {
+    setTutorialOpen(false)
+    try {
+      window.sessionStorage.setItem(CUSTOMIZER_TUTORIAL_KEY, '1')
+    } catch {
+      // Session storage may be unavailable; closing still hides it for this render.
+    }
+  }
 
   const buildDefaultPrefs = () => {
     const hidden = new Set(defaultHiddenColumnKeys)
@@ -133,6 +145,32 @@ export default function FundsTable({
       setColumnPrefs(reconcilePrefs(null))
     }
   }, [customizerEnabled, storageKey, columnKeySignature, defaultHiddenSignature])
+
+  useEffect(() => {
+    if (!customizerEnabled || loading || error || customizerTutorialTimerActive) return undefined
+    try {
+      if (window.sessionStorage.getItem(CUSTOMIZER_TUTORIAL_KEY)) return undefined
+    } catch {
+      return undefined
+    }
+    customizerTutorialTimerActive = true
+    const timer = window.setTimeout(() => {
+      try {
+        if (!window.sessionStorage.getItem(CUSTOMIZER_TUTORIAL_KEY)) {
+          setTutorialOpen(true)
+          window.sessionStorage.setItem(CUSTOMIZER_TUTORIAL_KEY, '1')
+        }
+      } catch {
+        setTutorialOpen(true)
+      } finally {
+        customizerTutorialTimerActive = false
+      }
+    }, 10000)
+    return () => {
+      window.clearTimeout(timer)
+      customizerTutorialTimerActive = false
+    }
+  }, [customizerEnabled, loading, error])
 
   const savePrefs = (next) => {
     setColumnPrefs(next)
@@ -262,7 +300,10 @@ export default function FundsTable({
             {customizerEnabled && (
               <button
                 type="button"
-                onClick={() => setCustomizerOpen((open) => !open)}
+                onClick={() => {
+                  markTutorialSeen()
+                  setCustomizerOpen((open) => !open)
+                }}
                 className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border transition-all ${
                   customizerOpen
                     ? 'border-neon-cyan/60 bg-neon-cyan/15 text-neon-cyan shadow-[0_0_18px_rgba(0,212,255,0.18)]'
@@ -351,6 +392,36 @@ export default function FundsTable({
                     <span className="min-w-0 flex-1 truncate text-xs font-dana" style={{ fontWeight: 700 }}>{item.column.label}</span>
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+          {customizerEnabled && tutorialOpen && !customizerOpen && (
+            <div
+              className="absolute left-1 top-12 z-40 flex w-[min(28rem,calc(100vw-1.5rem))] items-end gap-2 sm:left-3"
+              dir="rtl"
+            >
+              <img
+                src="/assets/table-customizer-guide.png"
+                alt=""
+                className="h-28 w-auto shrink-0 rounded-xl object-cover object-top shadow-2xl shadow-neon-cyan/10 sm:h-36"
+                loading="lazy"
+              />
+              <div className="relative mb-5 flex-1 rounded-2xl border border-neon-cyan/25 bg-[#08111f]/95 px-4 py-3 text-right shadow-2xl shadow-black/35 backdrop-blur-xl">
+                <span className="absolute -bottom-2 left-8 h-4 w-4 rotate-45 border-b border-l border-neon-cyan/25 bg-[#08111f]" />
+                <span className="absolute -top-7 left-8 h-7 w-7 border-l-2 border-t-2 border-neon-cyan/70" style={{ transform: 'rotate(45deg)' }} />
+                <button
+                  type="button"
+                  onClick={markTutorialSeen}
+                  className="absolute left-2 top-2 grid h-6 w-6 place-items-center rounded-md text-text-muted transition-colors hover:bg-white/5 hover:text-neon-pink"
+                  title="بستن"
+                  aria-label="بستن راهنما"
+                >
+                  <X size={13} />
+                </button>
+                <p className="pl-7 text-sm font-dana text-white" style={{ fontWeight: 900 }}>جدولت رو خودت بچین</p>
+                <p className="mt-1 text-xs font-dana leading-5 text-text-muted" style={{ fontWeight: 600 }}>
+                  از این چرخ‌دنده می‌تونی ستون‌ها رو حذف و اضافه کنی، ترتیبشون رو عوض کنی و جدول رو دقیقاً مطابق نیازت بچینی.
+                </p>
               </div>
             </div>
           )}
