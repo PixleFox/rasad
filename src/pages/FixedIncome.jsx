@@ -85,11 +85,16 @@ function aumScore(sizeRial) {
 }
 
 function buildReturnScoreMap(rows) {
+  const validReturns = rows
+    .map((fund) => fund.ytmReturn)
+    .filter((ytmReturn) => Number.isFinite(ytmReturn) && ytmReturn > 32)
+  const maxYtm = validReturns.length ? Math.max(...validReturns) : null
   const scoreForYtm = (ytmReturn) => {
-    if (!Number.isFinite(ytmReturn)) return 0
+    if (!Number.isFinite(ytmReturn) || !Number.isFinite(maxYtm)) return 0
     if (ytmReturn <= 32) return 0
-    const strength = Math.min(1, (ytmReturn - 32) / 10)
-    return Number((50 * Math.pow(strength, 0.85)).toFixed(1))
+    const gapFromBest = Math.max(0, maxYtm - ytmReturn)
+    const score = 60 * Math.exp(-0.62 * Math.pow(gapFromBest, 1.35))
+    return Number(Math.max(0, Math.min(60, score)).toFixed(1))
   }
   return new Map(rows.map((fund) => [fund.regNo, scoreForYtm(fund.ytmReturn)]))
 }
@@ -98,11 +103,11 @@ function applyEtfScore(rows, qData) {
   const returnScores = buildReturnScoreMap(rows)
   return rows.map((fund) => {
     const boardRaw = computeBoardQualityScore(fund, qData[fund.insCode])?.total ?? 0
-    const boardScore = Number(((boardRaw / 35) * 20).toFixed(1))
-    const reserve = Number(((reserveScore(fund) / 15) * 10).toFixed(1))
+    const boardScore = Number(((boardRaw / 35) * 18).toFixed(1))
+    const reserve = Number(((reserveScore(fund) / 15) * 7).toFixed(1))
     const ytm = returnScores.get(fund.regNo) ?? 0
-    const history = historyScore(fund.years)
-    const aum = Number(((aumScore(fund.sizeRial) / 20) * 15).toFixed(1))
+    const history = Number(((historyScore(fund.years) / 5) * 3).toFixed(1))
+    const aum = Number(((aumScore(fund.sizeRial) / 20) * 12).toFixed(1))
     const reservePenalty = negativeReservePenalty(fund)
     const rasadScore = Math.max(0, Math.min(100, boardScore + reserve + reservePenalty + ytm + history + aum))
     return {
