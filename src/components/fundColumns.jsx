@@ -88,7 +88,6 @@ export const fixedIncomeColumns = [
   COL.size,
   COL.return,
   COL.declaredRate,
-  COL.years,
   {
     key: 'reserve',
     label: 'ذخیره صندوق (میلیارد تومان)',
@@ -107,7 +106,6 @@ export const fixedIncomeColumns = [
       ),
   },
   COL.score,
-  COL.site,
 ]
 
 export const fixedIncomeColumnParts = COL
@@ -119,7 +117,6 @@ export const otherFundsColumns = [
   COL.size,
   COL.return,
   { key: 'risk', label: 'سطح ریسک دارایی', sortVal: (f) => f.risk, render: (f) => <RiskMeter value={f.risk} />, exportValue: (f) => f.risk },
-  COL.years,
   {
     key: 'bubble',
     label: 'حباب NAV بازار',
@@ -140,5 +137,4 @@ export const otherFundsColumns = [
     },
   },
   COL.score,
-  COL.site,
 ]

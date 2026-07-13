@@ -4,7 +4,6 @@ import { useLocation, useSearchParams } from 'react-router-dom'
 import { exportRowsToCsv } from '../lib/tableExport'
 import PhoneCaptureModal from './PhoneCaptureModal'
 import { getSavedExportPhone, recordExportLead, saveExportPhone } from '../lib/exportLeads'
-import { useExchangeRate } from '../hooks/useExchangeRate'
 
 const MEDAL = {
   0: { icon: '🏆', color: '#FFD700', shadow: '#FFD70060' },
@@ -28,7 +27,7 @@ export default function FundsTable({
   error,
   onRetry,
   emptyText,
-  goodSortKeys = ['score', 'return', 'size', 'years', 'reserve'],
+  goodSortKeys = ['score', 'return', 'size', 'reserve'],
   rowKey = (row, i) => row.regNo ?? row.id ?? i,
   rankField = null, // when set: rank cell shows row[rankField]; medals from row[rankField] value
   exportFileName = 'funds-table',
@@ -49,7 +48,6 @@ export default function FundsTable({
   const [columnPrefs, setColumnPrefs] = useState(null)
   const [draggedKey, setDraggedKey] = useState(null)
   const [tutorialOpen, setTutorialOpen] = useState(false)
-  const exchangeRate = useExchangeRate()
 
   const getMedal = (row, i) => {
     if (rankField != null) {
@@ -81,20 +79,9 @@ export default function FundsTable({
       </div>
     ),
   }
-  const hasFundAum = rows.some((row) => Number(row.sizeRial) > 0)
-  const dollarColumn = {
-    key: '__dollarValue',
-    label: 'ارزش صندوق (میلیون دلار)',
-    sortVal: (row) => exchangeRate?.priceToman > 0 ? row.sizeRial / 10 / exchangeRate.priceToman / 1e6 : null,
-    exportValue: (row) => exchangeRate?.priceToman > 0 ? row.sizeRial / 10 / exchangeRate.priceToman / 1e6 : null,
-    render: (row) => {
-      const value = exchangeRate?.priceToman > 0 ? row.sizeRial / 10 / exchangeRate.priceToman / 1e6 : null
-      return <span className="text-text-primary text-sm font-dana tabular-nums" style={{ fontWeight: 600 }}>{Number.isFinite(value) ? value.toLocaleString('fa-IR', { maximumFractionDigits: 1 }) : '—'}</span>
-    },
-  }
-  const siteColumn = columns.find((col) => col.key === 'site')
-  const columnsBeforeSite = siteColumn ? columns.filter((col) => col.key !== 'site') : columns
-  const allColumns = [rankCol, ...columnsBeforeSite, ...(hasFundAum ? [dollarColumn] : []), ...(siteColumn ? [siteColumn] : [])]
+  const globallyRemovedColumnKeys = new Set(['site', 'years'])
+  const tableColumns = columns.filter((col) => !globallyRemovedColumnKeys.has(col.key))
+  const allColumns = [rankCol, ...tableColumns]
   const columnKeySignature = allColumns.map((col) => col.key).join('|')
   const defaultHiddenSignature = defaultHiddenColumnKeys.join('|')
   const customizerEnabled = customizeColumns && location.pathname !== '/'

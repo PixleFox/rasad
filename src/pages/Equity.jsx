@@ -87,7 +87,6 @@ export default function Equity() {
           onRetry={() => setStartISO((d) => d)}
           emptyText="صندوقی یافت نشد."
           exportFileName={`equity-funds-${tab}`}
-          defaultHiddenColumnKeys={['__dollarValue', 'site']}
         />
       </motion.div>
 

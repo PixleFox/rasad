@@ -11,6 +11,7 @@ export default function Mixed() {
       subtitle="ترکیبی از سهام و اوراق — ریسک و بازدهی متوسط"
       floatAsset="/assets/Purple-planet.png"
       footnote="منبع: فیپیران · سطح ریسک از ترکیب دارایی (۰ تا ۱۰۰) · شاخص رصد امتیاز اختصاصی ۱۰ تا ۱۰۰ است."
+      splitByTradingType
     />
   )
 }

@@ -200,7 +200,6 @@ function buildColumns(tab) {
       ) : <span className="text-text-muted/40 text-xs">—</span>,
     }] : []),
     c.declaredRate,
-    c.years,
     {
       key: 'reserve',
       label: 'ذخیره صندوق (میلیارد تومان)',
@@ -219,7 +218,6 @@ function buildColumns(tab) {
         ),
     },
     c.score,
-    c.site,
   ]
 }
 
@@ -388,7 +386,7 @@ export default function FixedIncome() {
           goodSortKeys={['score', 'ytm', 'size', 'years', 'reserve', 'declaredRate']}
           rowKey={(row) => row.id ?? row.regNo}
           exportFileName="fixed-income-funds"
-          defaultHiddenColumnKeys={['years', '__dollarValue', 'declaredRate']}
+          defaultHiddenColumnKeys={['declaredRate']}
         />
       </motion.div>
 
