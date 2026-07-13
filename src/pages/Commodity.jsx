@@ -13,7 +13,6 @@ const TABS = [
   { id: 'silver', label: 'نقره', badge: 'صندوق‌های مبتنی بر نقره' },
   { id: 'saffron', label: 'زعفران', badge: 'صندوق‌های مبتنی بر زعفران' },
   { id: 'energy', label: 'انرژی', badge: 'نفت، برق، گاز و انرژی' },
-  { id: 'other', label: 'سایر کالایی', badge: 'چندکالایی یا نامشخص' },
 ]
 
 const commodityColumns = otherFundsColumns.filter((column) => column.key !== 'risk')
@@ -50,6 +49,7 @@ const subtypeBySymbol = {
   زمرد: 'gold',
   امرالد: 'gold',
   تابش: 'gold',
+  ریتون: 'gold',
 }
 
 const supplementalSilverFunds = [
@@ -179,7 +179,7 @@ function commoditySubtype(fund) {
   if (/طلا|سکه|زر|زرد|گلد|گلدیس|گوهر|جواهر|کهربا|مثقال|قیراط|دفینه|زروان|آلتون|زرفام|زرگر|رزگلد|گلدا|گنج|نگین|میراث|همیان|نفیس|قلک گلد/i.test(text)) {
     return 'gold'
   }
-  return 'other'
+  return 'gold'
 }
 
 export default function Commodity() {
