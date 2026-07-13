@@ -24,7 +24,23 @@ const normalizeText = (value) => String(value || '')
   .replace(/\s+/g, ' ')
   .trim()
 
+const subtypeBySymbol = {
+  سینرژی: 'energy',
+  آتش: 'gold',
+  درنا: 'gold',
+  لیان: 'gold',
+  درخشان: 'gold',
+  نهال: 'saffron',
+  ناب: 'gold',
+  رز: 'gold',
+  زمرد: 'gold',
+  امرالد: 'gold',
+  تابش: 'gold',
+}
+
 function commoditySubtype(fund) {
+  const symbol = normalizeText(fund.symbol)
+  if (subtypeBySymbol[symbol]) return subtypeBySymbol[symbol]
   const text = normalizeText(`${fund.name} ${fund.symbol}`)
   if (/نقره|سیمین|سیلور/i.test(text)) return 'silver'
   if (/زعفران|سحرخیز/i.test(text)) return 'saffron'
