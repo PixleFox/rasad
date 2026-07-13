@@ -38,6 +38,49 @@ const subtypeBySymbol = {
   تابش: 'gold',
 }
 
+const supplementalSilverFunds = [
+  {
+    regNo: 'tsetmc-18156575395080321',
+    name: 'بازده نقره نوا',
+    symbol: 'سیلور',
+    manager: '',
+    insCode: '18156575395080321',
+  },
+  {
+    regNo: 'tsetmc-33761569293467411',
+    name: 'نقره سیمین هوبر',
+    symbol: 'سیمین',
+    manager: '',
+    insCode: '33761569293467411',
+  },
+]
+
+function buildSupplementalFund(item) {
+  return {
+    ...item,
+    id: item.regNo,
+    type: 5,
+    typeLabel: 'کالایی',
+    isCharity: false,
+    isETF: true,
+    isSupplementalTsetmc: true,
+    sizeRial: 0,
+    units: 0,
+    navRet: 0,
+    statNav: 0,
+    cancelNav: 0,
+    issueNav: 0,
+    oneYearReturn: null,
+    dividendDays: 0,
+    initiationDate: null,
+    rangeReturn: null,
+    rangeSource: 'tsetmc',
+    comp: { stock: 0, bond: 0, cash: 0, deposit: 0, other: 100 },
+    website: null,
+    dataDate: null,
+  }
+}
+
 function commoditySubtype(fund) {
   const symbol = normalizeText(fund.symbol)
   if (subtypeBySymbol[symbol]) return subtypeBySymbol[symbol]
@@ -55,10 +98,14 @@ export default function Commodity() {
   const { funds, startDate, endDate, loading, error, startISO, endISO, setStartISO, setEndISO } = useRangeFunds()
   const [tab, setTab] = useState('gold')
 
-  const allRows = useMemo(
-    () => enrichFunds(funds.filter((fund) => fund.type === 5 && !fund.isCharity), endDate || endISO),
-    [funds, endDate, endISO]
-  )
+  const allRows = useMemo(() => {
+    const commodityFunds = funds.filter((fund) => fund.type === 5 && !fund.isCharity)
+    const seen = new Set(commodityFunds.flatMap((fund) => [fund.insCode, normalizeText(fund.symbol)]).filter(Boolean))
+    const supplemental = supplementalSilverFunds
+      .filter((fund) => !seen.has(fund.insCode) && !seen.has(normalizeText(fund.symbol)))
+      .map(buildSupplementalFund)
+    return enrichFunds([...commodityFunds, ...supplemental], endDate || endISO)
+  }, [funds, endDate, endISO])
   const groups = useMemo(() => {
     const next = Object.fromEntries(TABS.map((item) => [item.id, []]))
     allRows.forEach((fund) => {
