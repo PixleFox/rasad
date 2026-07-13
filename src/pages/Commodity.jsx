@@ -26,6 +26,14 @@ const normalizeText = (value) => String(value || '')
 
 const subtypeBySymbol = {
   سینرژی: 'energy',
+  سیگلو: 'silver',
+  سیمین: 'silver',
+  سیلور: 'silver',
+  نقرابی: 'silver',
+  نقران: 'silver',
+  نقرسا: 'silver',
+  نقرفام: 'silver',
+  نقرین: 'silver',
   آتش: 'gold',
   درنا: 'gold',
   لیان: 'gold',
@@ -40,6 +48,13 @@ const subtypeBySymbol = {
 
 const supplementalSilverFunds = [
   {
+    regNo: 'tsetmc-10098482000925815',
+    name: 'کالای آشنای یک',
+    symbol: 'سیگلو',
+    manager: '',
+    insCode: '10098482000925815',
+  },
+  {
     regNo: 'tsetmc-18156575395080321',
     name: 'بازده نقره نوا',
     symbol: 'سیلور',
@@ -52,6 +67,41 @@ const supplementalSilverFunds = [
     symbol: 'سیمین',
     manager: '',
     insCode: '33761569293467411',
+  },
+  {
+    regNo: 'tsetmc-8620139816622134',
+    name: 'کالای کهکشان فیروزه یک',
+    symbol: 'نقرابی',
+    manager: '',
+    insCode: '8620139816622134',
+  },
+  {
+    regNo: 'tsetmc-41483334879559487',
+    name: 'کالای کهربا یک',
+    symbol: 'نقران',
+    manager: '',
+    insCode: '41483334879559487',
+  },
+  {
+    regNo: 'tsetmc-47717365931256099',
+    name: 'کالای پارسیان یک',
+    symbol: 'نقرسا',
+    manager: '',
+    insCode: '47717365931256099',
+  },
+  {
+    regNo: 'tsetmc-30714541738317499',
+    name: 'کالای تابان تمدن یک',
+    symbol: 'نقرفام',
+    manager: '',
+    insCode: '30714541738317499',
+  },
+  {
+    regNo: 'tsetmc-12590355983583239',
+    name: 'کالای نوویرا یک',
+    symbol: 'نقرین',
+    manager: '',
+    insCode: '12590355983583239',
   },
 ]
 
