@@ -259,9 +259,15 @@ export default function FundsTable({
     if (savedPhone) finishExport(savedPhone)
     else setPhoneModalOpen(true)
   }
+  const primaryMobileColumn = visibleColumns.find((col) => col.key !== '__rank' && col.align === 'start') ||
+    visibleColumns.find((col) => col.key !== '__rank')
+  const rankMobileColumn = visibleColumns.find((col) => col.key === '__rank')
+  const mobileDetailColumns = visibleColumns.filter((col) =>
+    col.key !== '__rank' && col.key !== primaryMobileColumn?.key
+  )
 
   return (
-    <div className="rounded-2xl border border-neon-cyan/10 bg-surface/40 backdrop-blur-sm overflow-hidden">
+    <div className="overflow-hidden rounded-lg border border-neon-cyan/10 bg-surface/40 backdrop-blur-sm">
       <PhoneCaptureModal
         open={phoneModalOpen}
         busy={exportBusy}
@@ -269,19 +275,19 @@ export default function FundsTable({
         onSubmit={(phone) => finishExport(saveExportPhone(phone))}
       />
       {(exportEnabled || searchable || customizerEnabled) && (
-        <div className="relative flex flex-col gap-2 px-3 py-2 border-b border-neon-cyan/10 sm:flex-row sm:items-center sm:justify-between" dir="ltr">
-          <div className="flex items-center gap-2" dir="rtl">
+        <div className="relative flex flex-col gap-2 border-b border-neon-cyan/10 px-2 py-2 sm:flex-row sm:items-center sm:justify-between sm:px-3" dir="ltr">
+          <div className="flex items-center gap-2 overflow-x-auto pb-0.5 sm:overflow-visible sm:pb-0" dir="rtl">
             {exportEnabled && (
               <button
                 type="button"
                 onClick={handleExport}
                 disabled={!canExport}
-                className="inline-flex items-center gap-2 rounded-lg border border-neon-green/30 bg-neon-green/10 px-3 py-1.5 text-xs font-dana text-neon-green transition-colors hover:border-neon-green/60 hover:bg-neon-green/15 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/5 disabled:text-text-muted/50"
+                className="inline-flex h-9 shrink-0 items-center gap-2 rounded-lg border border-neon-green/30 bg-neon-green/10 px-3 text-xs font-dana text-neon-green transition-colors hover:border-neon-green/60 hover:bg-neon-green/15 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/5 disabled:text-text-muted/50"
                 style={{ fontWeight: 700 }}
                 title="خروجی اکسل"
               >
                 <Download size={15} aria-hidden="true" />
-                خروجی اکسل
+                <span className="hidden sm:inline">خروجی اکسل</span>
               </button>
             )}
             {customizerEnabled && (
@@ -291,7 +297,7 @@ export default function FundsTable({
                   markTutorialSeen()
                   setCustomizerOpen((open) => !open)
                 }}
-                className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border transition-all ${
+                className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border transition-all ${
                   customizerOpen
                     ? 'border-neon-cyan/60 bg-neon-cyan/15 text-neon-cyan shadow-[0_0_18px_rgba(0,212,255,0.18)]'
                     : 'border-neon-cyan/20 bg-space/45 text-text-muted hover:border-neon-cyan/50 hover:text-neon-cyan'
@@ -310,7 +316,7 @@ export default function FundsTable({
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder={searchPlaceholder}
-                className="w-full rounded-lg border border-neon-cyan/15 bg-space/45 py-2 pr-8 pl-3 text-xs font-dana text-text-primary outline-none transition-colors placeholder:text-text-muted/60 focus:border-neon-cyan/50"
+                className="h-10 w-full rounded-lg border border-neon-cyan/15 bg-space/45 py-2 pr-8 pl-3 text-sm font-dana text-text-primary outline-none transition-colors placeholder:text-text-muted/60 focus:border-neon-cyan/50 sm:h-auto sm:text-xs"
                 style={{ fontWeight: 600 }}
               />
             </label>
@@ -414,7 +420,73 @@ export default function FundsTable({
           )}
         </div>
       )}
-      <div className="overflow-x-auto">
+      <div className="md:hidden">
+        {loading ? (
+          <div className="space-y-2 p-2">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="rounded-lg border border-white/5 bg-white/[0.025] p-3">
+                <div className="mb-3 h-4 w-2/3 rounded bg-white/5 animate-pulse" />
+                <div className="grid grid-cols-2 gap-2">
+                  {Array.from({ length: 4 }).map((__, j) => (
+                    <div key={j} className="h-10 rounded bg-white/5 animate-pulse" />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : error ? (
+          <div className="px-4 py-12 text-center">
+            <p className="mb-2 text-sm font-dana text-neon-pink" style={{ fontWeight: 600 }}>{error}</p>
+            {onRetry && (
+              <button onClick={onRetry} className="text-sm font-dana text-neon-cyan hover:text-white" style={{ fontWeight: 600 }}>
+                تلاش دوباره
+              </button>
+            )}
+          </div>
+        ) : sorted.length === 0 ? (
+          <div className="px-4 py-12 text-center text-sm font-dana text-text-muted" style={{ fontWeight: 600 }}>
+            {query.trim() ? 'نتیجه‌ای برای جستجو پیدا نشد.' : emptyText || 'صندوقی یافت نشد.'}
+          </div>
+        ) : (
+          <div className="space-y-2 p-2">
+            {sorted.map((row, i) => (
+              <article
+                key={rowKey(row, i)}
+                className="rounded-lg border border-neon-cyan/10 bg-[#07101d]/75 p-3 shadow-lg shadow-black/10"
+                style={getRowStyle(row)}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1 text-right">
+                    {primaryMobileColumn ? (
+                      <div className="mobile-card-value text-sm text-text-primary" style={{ fontWeight: 900 }}>
+                        {primaryMobileColumn.render(row, i)}
+                      </div>
+                    ) : null}
+                  </div>
+                  {rankMobileColumn && (
+                    <div className="shrink-0 rounded-lg border border-white/10 bg-white/[0.035] px-2 py-1">
+                      {rankMobileColumn.render(row, i)}
+                    </div>
+                  )}
+                </div>
+                {mobileDetailColumns.length > 0 && (
+                  <dl className="mt-3 grid grid-cols-2 gap-2">
+                    {mobileDetailColumns.map((col) => (
+                      <div key={col.key} className="min-w-0 rounded-lg border border-white/5 bg-white/[0.025] px-2 py-2">
+                        <dt className="truncate text-[0.62rem] font-dana text-text-muted/70" style={{ fontWeight: 600 }}>{col.label}</dt>
+                        <dd className="mobile-card-value mt-1 min-w-0 text-sm text-text-primary" style={{ fontWeight: 800 }}>
+                          {col.render(row, i)}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                )}
+              </article>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="hidden overflow-x-auto md:block">
         <table className="w-full border-collapse" style={{ minWidth }}>
           <thead>
             <tr

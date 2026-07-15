@@ -54,13 +54,13 @@ export default function FundsPageLayout({
         />
       )}
 
-      <div className="relative z-10 mx-auto max-w-6xl px-3 pb-14 pt-20 sm:px-6 sm:pb-20 sm:pt-24 lg:pb-24 lg:pt-28">
+      <div className="relative z-10 mx-auto max-w-6xl px-2 pb-12 pt-16 sm:px-6 sm:pb-20 sm:pt-24 lg:pb-24 lg:pt-28">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          className="mb-6 flex flex-col justify-between gap-4 sm:mb-8 lg:mb-10 lg:flex-row lg:items-end lg:gap-6"
+          className="mb-5 flex flex-col justify-between gap-4 sm:mb-8 lg:mb-10 lg:flex-row lg:items-end lg:gap-6"
         >
           <div>
             <div
@@ -72,7 +72,7 @@ export default function FundsPageLayout({
                 {badge}
               </span>
             </div>
-            <h1 className="text-2xl font-dana text-white sm:text-4xl lg:text-5xl" style={{ fontWeight: 900 }}>
+            <h1 className="text-[1.7rem] leading-tight font-dana text-white sm:text-4xl lg:text-5xl" style={{ fontWeight: 900 }}>
               {title}{' '}
               <span style={{ color: accentColor, textShadow: `0 0 30px ${accentColor}80` }}>{highlight}</span>{' '}
               {titleTail}

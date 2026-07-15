@@ -38,6 +38,17 @@ input {
   -webkit-tap-highlight-color: transparent;
 }
 
+.mobile-card-value,
+.mobile-card-value * {
+  max-width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.mobile-card-value > * {
+  justify-content: flex-start;
+}
+
 @media (max-width: 639px) {
   body {
     padding-bottom: env(safe-area-inset-bottom);
@@ -45,6 +56,10 @@ input {
 
   .rmdp-container {
     width: 100%;
+  }
+
+  .rmdp-calendar {
+    max-width: calc(100vw - 1.5rem);
   }
 }
 
