@@ -125,7 +125,7 @@ export default function FundCategoryPage({
         const item = data.item || data
         const base = Number(item?.baseUnitsTotalNetAssetValue)
         const superValue = Number(item?.superUnitsTotalNetAssetValue)
-        return [regNo, base > 0 && superValue > 0 ? base / superValue : null]
+        return [regNo, base > 0 && superValue > 0 ? 1 + (superValue / base) : null]
       } catch {
         return [regNo, null]
       }
