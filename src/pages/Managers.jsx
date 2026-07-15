@@ -1,10 +1,10 @@
 import { useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import FundsPageLayout from '../components/FundsPageLayout'
 import FundsTable from '../components/FundsTable'
 import { useRankingData } from '../hooks/useRankingData'
-import { computeManagers, faNum } from '../lib/fipiran'
+import { computeManagers, faNum, monthsBeforeISO, todayISO } from '../lib/fipiran'
 
 function FlowCell({ value }) {
   if (!Number.isFinite(value)) return <span className="text-text-muted/40 text-xs">—</span>
@@ -37,7 +37,31 @@ function RankChangeCell({ value }) {
 
 export default function Managers() {
   const navigate = useNavigate()
-  const { currentFunds, priorFunds, startDate, endDate, loading, error, startISO, endISO, setStartISO, setEndISO } = useRankingData()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const initialEnd = searchParams.get('end') || todayISO()
+  const initialStart = searchParams.get('start') || monthsBeforeISO(initialEnd, 1)
+  const {
+    currentFunds,
+    priorFunds,
+    startDate,
+    endDate,
+    loading,
+    error,
+    startISO,
+    endISO,
+    setStartISO: setRankingStartISO,
+    setEndISO: setRankingEndISO,
+  } = useRankingData({ startISO: initialStart, endISO: initialEnd })
+
+  const setStartISO = (value) => {
+    setRankingStartISO(value)
+    setSearchParams({ start: value, end: endISO }, { replace: true })
+  }
+
+  const setEndISO = (value) => {
+    setRankingEndISO(value)
+    setSearchParams({ start: startISO, end: value }, { replace: true })
+  }
 
   const rows = useMemo(() => {
     const current = computeManagers(currentFunds, endDate || endISO)
@@ -57,7 +81,7 @@ export default function Managers() {
       align: 'start',
       render: (row) => (
         <button
-          onClick={() => navigate(`/managers/${encodeURIComponent(row.core)}`)}
+          onClick={() => navigate(`/managers/${encodeURIComponent(row.core)}?start=${encodeURIComponent(startISO)}&end=${encodeURIComponent(endISO)}`)}
           className="flex items-center gap-2 hover:opacity-75 transition-opacity text-right"
         >
           <span className="text-neon-violet text-sm" style={{ fontWeight: 700 }}>↗</span>

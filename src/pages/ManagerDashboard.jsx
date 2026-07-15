@@ -1,7 +1,8 @@
 import { useMemo, useState, useEffect } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import FundsTable from '../components/FundsTable'
+import RangePicker from '../components/RangePicker'
 import {
   fetchRangeReturns, computeManagers, faNum, fmtPercent,
   todayISO, monthsBeforeISO, FUND_TYPES, toJalali,
@@ -69,34 +70,56 @@ function StatCard({ label, value, color = '#7C3AED' }) {
 export default function ManagerDashboard() {
   const { managerId } = useParams()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const core = decodeURIComponent(managerId)
+  const initialEnd = searchParams.get('end') || todayISO()
+  const initialStart = searchParams.get('start') || monthsBeforeISO(initialEnd, 1)
 
   const [loading, setLoading] = useState(true)
   const [error, setError]   = useState(null)
   const [mgrRow, setMgrRow] = useState(null)
-  const [monthFunds, setMonthFunds]   = useState([])
+  const [rangeFunds, setRangeFunds]   = useState([])
   const [quarterFunds, setQuarterFunds] = useState([])
+  const [startISO, setStartISOState] = useState(initialStart)
+  const [endISO, setEndISOState] = useState(initialEnd)
+  const [startDate, setStartDate] = useState(null)
+  const [endDate, setEndDate] = useState(null)
+  const [quarterStartDate, setQuarterStartDate] = useState(null)
+  const [quarterEndDate, setQuarterEndDate] = useState(null)
+
+  const setStartISO = (value) => {
+    setStartISOState(value)
+    setSearchParams({ start: value, end: endISO }, { replace: true })
+  }
+
+  const setEndISO = (value) => {
+    setEndISOState(value)
+    setSearchParams({ start: startISO, end: value }, { replace: true })
+  }
 
   useEffect(() => {
-    const today = todayISO()
-    const m1    = monthsBeforeISO(today, 1)
-    const m3    = monthsBeforeISO(today, 3)
+    const quarterStart = monthsBeforeISO(endISO, 3)
     setLoading(true)
+    setError(null)
     Promise.all([
-      fetchRangeReturns(m1, today),
-      fetchRangeReturns(m3, today),
+      fetchRangeReturns(startISO, endISO),
+      fetchRangeReturns(quarterStart, endISO),
     ])
-      .then(([res1, res3]) => {
-        const mgrs = computeManagers(res1.funds, res1.endDate)
+      .then(([rangeRes, quarterRes]) => {
+        const mgrs = computeManagers(rangeRes.funds, rangeRes.endDate)
         const found = mgrs.find((m) => m.core === core)
         if (!found) { setError('مدیر یافت نشد'); return }
         setMgrRow(found)
-        setMonthFunds(res1.funds)
-        setQuarterFunds(res3.funds)
+        setRangeFunds(rangeRes.funds)
+        setQuarterFunds(quarterRes.funds)
+        setStartDate(rangeRes.startDate)
+        setEndDate(rangeRes.endDate)
+        setQuarterStartDate(quarterRes.startDate)
+        setQuarterEndDate(quarterRes.endDate)
       })
       .catch((e) => setError(e.message || 'خطا در دریافت داده'))
       .finally(() => setLoading(false))
-  }, [core])
+  }, [core, startISO, endISO])
 
   // ── table 1: status ──────────────────────────────────────────────────────
   const statusCols = [
@@ -137,11 +160,11 @@ export default function ManagerDashboard() {
     const types = [...new Set(mgrRow.funds.map((f) => f.type))]
     const rm = new Map(), rq = new Map()
     types.forEach((t) => {
-      rankWithinType(monthFunds, t).forEach((v, k) => rm.set(k, v))
+      rankWithinType(rangeFunds, t).forEach((v, k) => rm.set(k, v))
       rankWithinType(quarterFunds, t).forEach((v, k) => rq.set(k, v))
     })
     return { rankMonth: rm, rankQuarter: rq }
-  }, [mgrRow, monthFunds, quarterFunds])
+  }, [mgrRow, rangeFunds, quarterFunds])
 
   const rankCols = [
     {
@@ -155,14 +178,14 @@ export default function ManagerDashboard() {
       ),
     },
     {
-      key: 'rankM', label: 'رتبه ماهانه',
+      key: 'rankM', label: 'رتبه در بازه',
       sortVal: (f) => rankMonth.get(f.regNo)?.rank ?? 9999,
       render: (f) => { const d = rankMonth.get(f.regNo); return d ? <RankCell rank={d.rank} total={d.total} /> : <span className="text-text-muted/40 text-xs">—</span> },
     },
     {
-      key: 'retM', label: 'بازده ماهانه (%)',
-      sortVal: (f) => { const mf = monthFunds.find((x) => x.regNo === f.regNo); return mf?.rangeReturn ?? -Infinity },
-      render: (f) => { const mf = monthFunds.find((x) => x.regNo === f.regNo); return <RetCell value={mf?.rangeReturn} /> },
+      key: 'retM', label: 'بازده در بازه (%)',
+      sortVal: (f) => { const mf = rangeFunds.find((x) => x.regNo === f.regNo); return mf?.rangeReturn ?? -Infinity },
+      render: (f) => { const mf = rangeFunds.find((x) => x.regNo === f.regNo); return <RetCell value={mf?.rangeReturn} /> },
     },
     {
       key: 'rankQ', label: 'رتبه سه‌ماهه',
@@ -183,7 +206,7 @@ export default function ManagerDashboard() {
     const totalAumRial = funds.reduce((s, f) => s + (f.sizeRial || 0), 0)
     const totalFlowRial = funds.reduce((s, f) =>
       s + (Number.isFinite(f.unitsStart) && f.navRet > 0 ? (f.units - f.unitsStart) * f.navRet : 0), 0)
-    const monthRets = funds.map((f) => monthFunds.find((x) => x.regNo === f.regNo)?.rangeReturn).filter(Number.isFinite)
+    const monthRets = funds.map((f) => rangeFunds.find((x) => x.regNo === f.regNo)?.rangeReturn).filter(Number.isFinite)
     const avgMonthRet = monthRets.length ? monthRets.reduce((a, b) => a + b, 0) / monthRets.length : null
     return {
       fundCount: funds.length,
@@ -191,7 +214,7 @@ export default function ManagerDashboard() {
       flowBT: totalFlowRial / 1e10,
       avgMonthRet,
     }
-  }, [mgrRow, monthFunds])
+  }, [mgrRow, rangeFunds])
 
   // ── render ────────────────────────────────────────────────────────────────
   if (loading) {
@@ -216,7 +239,7 @@ export default function ManagerDashboard() {
     <div className="max-w-6xl mx-auto px-4 py-10 space-y-10" dir="rtl">
       {/* back */}
       <button
-        onClick={() => navigate('/managers')}
+        onClick={() => navigate(`/managers?start=${encodeURIComponent(startISO)}&end=${encodeURIComponent(endISO)}`)}
         className="flex items-center gap-2 text-text-muted hover:text-text-primary transition-colors font-dana text-sm"
         style={{ fontWeight: 700 }}
       >
@@ -234,8 +257,19 @@ export default function ManagerDashboard() {
           {mgrRow.name}
         </h1>
         <p className="text-text-muted text-sm font-dana mt-1" style={{ fontWeight: 600 }}>
-          وضعیت و عملکرد صندوق‌های تحت مدیریت
+          وضعیت و عملکرد صندوق‌های تحت مدیریت از {toJalali(startDate || startISO)} تا {toJalali(endDate || endISO)}
         </p>
+      </motion.div>
+
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35, delay: 0.03 }}
+        className="flex flex-col gap-3 rounded-xl border border-white/10 bg-white/5 p-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <div className="text-sm text-text-primary font-dana" style={{ fontWeight: 800 }}>بازه محاسبات داشبورد</div>
+          <div className="mt-1 text-xs text-text-muted font-dana" style={{ fontWeight: 600 }}>
+            داده‌ها بر اساس بازه {toJalali(startDate || startISO)} تا {toJalali(endDate || endISO)} محاسبه شده‌اند.
+          </div>
+        </div>
+        <RangePicker startISO={startISO} endISO={endISO} onStart={setStartISO} onEnd={setEndISO} />
       </motion.div>
 
       {/* summary cards */}
@@ -251,7 +285,7 @@ export default function ManagerDashboard() {
           />
           {summary.avgMonthRet != null && (
             <StatCard
-              label="میانگین بازده ماهانه"
+              label="میانگین بازده در بازه"
               value={(summary.avgMonthRet >= 0 ? '+' : '') + faNum(summary.avgMonthRet.toFixed(1)) + '٪'}
               color={summary.avgMonthRet >= 0 ? '#00FF9D' : '#FF3B6B'}
             />
@@ -310,14 +344,14 @@ export default function ManagerDashboard() {
           emptyText="داده رتبه‌بندی در دسترس نیست"
         />
         <p className="text-left text-text-muted text-xs font-dana mt-2" style={{ fontWeight: 600 }}>
-          منبع بازدهی‌ها: فیپیران · رتبه در میان صندوق‌های هم‌نوع
+          منبع بازدهی‌ها: فیپیران · رتبه بازه‌ای از {toJalali(startDate || startISO)} تا {toJalali(endDate || endISO)} · رتبه سه‌ماهه از {toJalali(quarterStartDate || monthsBeforeISO(endISO, 3))} تا {toJalali(quarterEndDate || endISO)}
         </p>
 
         {/* table 2 totals */}
         {summary?.avgMonthRet != null && (
           <div className="flex flex-wrap gap-4 mt-4 p-4 rounded-xl border border-white/10 bg-white/5">
             <div className="flex flex-col gap-0.5">
-              <span className="text-text-muted text-xs font-dana" style={{ fontWeight: 600 }}>میانگین بازده ماهانه صندوق‌ها</span>
+              <span className="text-text-muted text-xs font-dana" style={{ fontWeight: 600 }}>میانگین بازده صندوق‌ها در بازه</span>
               <span className="text-base font-dana tabular-nums" style={{ fontWeight: 900, color: summary.avgMonthRet >= 0 ? '#00FF9D' : '#FF3B6B' }}>
                 {faNum(summary.avgMonthRet.toFixed(1))}٪
               </span>

@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
 import { fetchRangeReturns, todayISO, monthsBeforeISO, shiftISO, daysBetween } from '../lib/fipiran'
 
-export function useRankingData() {
-  const [startISO, setStartISO] = useState(() => monthsBeforeISO(todayISO(), 1))
-  const [endISO, setEndISO]     = useState(() => todayISO())
+export function useRankingData(options = {}) {
+  const initialEndISO = options.endISO || todayISO()
+  const initialStartISO = options.startISO || monthsBeforeISO(initialEndISO, 1)
+  const [startISO, setStartISO] = useState(() => initialStartISO)
+  const [endISO, setEndISO]     = useState(() => initialEndISO)
 
   const [currentFunds, setCurrentFunds] = useState([])
   const [priorFunds, setPriorFunds]     = useState([])
