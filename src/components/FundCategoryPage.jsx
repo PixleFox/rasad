@@ -98,9 +98,13 @@ export default function FundCategoryPage({
   splitByTradingType = false,
   supplementalFunds = [],
   includeLeveragedRatio = false,
+  groupTabs = [],
+  getRowGroup = null,
+  patchRow = null,
 }) {
   const { funds, startDate, endDate, loading, error, startISO, endISO, setStartISO, setEndISO } = useRangeFunds()
   const [tab, setTab] = useState('etf')
+  const [groupTab, setGroupTab] = useState('all')
   const [supplementalMetrics, setSupplementalMetrics] = useState({})
   const [leveragedRatios, setLeveragedRatios] = useState({})
 
@@ -159,21 +163,34 @@ export default function FundCategoryPage({
 
   const allRows = useMemo(() => {
     const baseRows = funds.filter((f) => f.type === typeId && !f.isCharity)
-    const seen = new Set(baseRows.flatMap((fund) => [fund.insCode, normalizeSymbol(fund.symbol)]).filter(Boolean))
+    const patchedBaseRows = typeof patchRow === 'function'
+      ? baseRows.map((fund) => patchRow(fund))
+      : baseRows
+    const seen = new Set(patchedBaseRows.flatMap((fund) => [fund.insCode, normalizeSymbol(fund.symbol)]).filter(Boolean))
+    const baseNames = patchedBaseRows.map((fund) => normalizeSymbol(fund.name)).filter(Boolean)
     const supplemental = supplementalFunds
-      .filter((fund) => !seen.has(fund.insCode) && !seen.has(normalizeSymbol(fund.symbol)))
+      .filter((fund) => {
+        const cleanName = normalizeSymbol(cleanSupplementalName(fund.name))
+        return !seen.has(fund.insCode) &&
+          !seen.has(normalizeSymbol(fund.symbol)) &&
+          !baseNames.some((name) => name === cleanName || name.includes(cleanName) || cleanName.includes(name))
+      })
       .map((fund) => buildSupplementalFund(fund, typeId, supplementalMetrics[fund.insCode]))
-    return enrichFunds([...baseRows, ...supplemental], endDate || endISO)
+    return enrichFunds([...patchedBaseRows, ...supplemental], endDate || endISO)
       .map((fund) => ({
         ...fund,
         leveragedRatio: leveragedRatios[String(fund.regNo)] ?? null,
+        rowGroup: typeof getRowGroup === 'function' ? getRowGroup(fund) : null,
       }))
-  }, [funds, typeId, endDate, endISO, supplementalFunds, supplementalMetrics, leveragedRatios])
+  }, [funds, typeId, endDate, endISO, supplementalFunds, supplementalMetrics, leveragedRatios, getRowGroup, patchRow])
   const etfRows = useMemo(() => allRows.filter((fund) => fund.isETF), [allRows])
   const issuanceRows = useMemo(() => allRows.filter((fund) => !fund.isETF), [allRows])
-  const sourceRows = splitByTradingType
+  const tradingRows = splitByTradingType
     ? (tab === 'etf' ? etfRows : issuanceRows)
     : allRows
+  const sourceRows = groupTabs.length && groupTab !== 'all'
+    ? tradingRows.filter((fund) => fund.rowGroup === groupTab)
+    : tradingRows
 
   const columns = useMemo(
     () => {
@@ -206,6 +223,9 @@ export default function FundCategoryPage({
   )
   const marketRows = useMarketBubbles(sourceRows)
   const getTabCount = (id) => (id === 'etf' ? etfRows.length : issuanceRows.length)
+  const getGroupCount = (id) => id === 'all'
+    ? tradingRows.length
+    : tradingRows.filter((fund) => fund.rowGroup === id).length
 
   return (
     <FundsPageLayout
@@ -256,6 +276,32 @@ export default function FundCategoryPage({
         </motion.div>
       )}
 
+      {groupTabs.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+          className="flex flex-wrap gap-2 mb-6"
+        >
+          {groupTabs.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setGroupTab(item.id)}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-dana cursor-pointer transition-all duration-200 ${
+                groupTab === item.id
+                  ? 'bg-neon-cyan/15 text-neon-cyan border border-neon-cyan/40'
+                  : 'bg-surface/60 text-text-muted border border-neon-cyan/10 hover:border-neon-cyan/30 hover:text-text-primary'
+              }`}
+              style={{ fontWeight: 700 }}
+            >
+              <span>{item.label}</span>
+              {!loading && <span className="text-xs opacity-70">({faNum(getGroupCount(item.id))})</span>}
+            </button>
+          ))}
+        </motion.div>
+      )}
+
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
         <FundSummary rows={marketRows} loading={loading} />
         <FundsTable
@@ -267,7 +313,7 @@ export default function FundCategoryPage({
           error={error}
           onRetry={() => setStartISO((d) => d)}
           emptyText="صندوقی یافت نشد."
-          exportFileName={splitByTradingType ? `funds-${typeId}-${tab}` : `funds-${typeId}`}
+          exportFileName={splitByTradingType ? `funds-${typeId}-${tab}-${groupTab}` : `funds-${typeId}-${groupTab}`}
         />
       </motion.div>
 
