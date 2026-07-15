@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import FundsPageLayout from './FundsPageLayout'
 import FundsTable from './FundsTable'
@@ -7,6 +7,77 @@ import { useRangeFunds } from '../hooks/useRangeFunds'
 import { enrichFunds, faNum } from '../lib/fipiran'
 import FundSummary from './FundSummary'
 import { useMarketBubbles } from '../hooks/useMarketBubbles'
+
+const isoToTseDate = (iso) => Number(String(iso || '').replaceAll('-', ''))
+const tseDateToISO = (date) => {
+  const value = String(date || '')
+  return value.length === 8 ? `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}` : null
+}
+
+const normalizeSymbol = (value) => String(value || '')
+  .replace(/[يى]/g, 'ی')
+  .replace(/ك/g, 'ک')
+  .replace(/\s+/g, ' ')
+  .trim()
+
+function nearestDailyPrice(dailyList, iso) {
+  const target = isoToTseDate(iso)
+  return [...dailyList]
+    .filter((row) => Number(row?.dEven) <= target && Number(row?.pDrCotVal) > 0)
+    .sort((a, b) => Number(b.dEven) - Number(a.dEven))[0] || null
+}
+
+async function fetchSupplementalMetric(fund, startISO, endISO) {
+  const [infoRes, etfRes, dailyRes] = await Promise.all([
+    fetch(`/tsetmc/Instrument/GetInstrumentInfo/${fund.insCode}`),
+    fetch(`/tsetmc/Fund/GetETFByInsCode/${fund.insCode}`),
+    fetch(`/tsetmc/ClosingPrice/GetClosingPriceDailyList/${fund.insCode}/400`),
+  ])
+  const [info, etf, daily] = await Promise.all([infoRes.json(), etfRes.json(), dailyRes.json()])
+  const units = Number(info?.instrumentInfo?.etfIssuedUnit) || Number(info?.instrumentInfo?.zTitad) || 0
+  const nav = Number(etf?.etf?.pRedTran) || 0
+  const dailyList = Array.isArray(daily?.closingPriceDaily) ? daily.closingPriceDaily : []
+  const startRow = nearestDailyPrice(dailyList, startISO)
+  const endRow = nearestDailyPrice(dailyList, endISO)
+  const startPrice = Number(startRow?.pDrCotVal)
+  const endPrice = Number(endRow?.pDrCotVal)
+  return {
+    sizeRial: units > 0 && nav > 0 ? units * nav : 0,
+    navRet: nav,
+    rangeReturn: startPrice > 0 && endPrice > 0 ? (endPrice / startPrice - 1) * 100 : null,
+    marketReturnStartDate: tseDateToISO(startRow?.dEven),
+    marketReturnEndDate: tseDateToISO(endRow?.dEven),
+  }
+}
+
+function buildSupplementalFund(item, typeId, metrics = {}) {
+  return {
+    ...item,
+    regNo: item.regNo || `tsetmc-${item.insCode}`,
+    id: item.regNo || `tsetmc-${item.insCode}`,
+    type: typeId,
+    isCharity: false,
+    isETF: true,
+    isSupplementalTsetmc: true,
+    sizeRial: metrics.sizeRial ?? 0,
+    manager: item.manager || '',
+    units: 0,
+    navRet: metrics.navRet ?? 0,
+    statNav: 0,
+    cancelNav: metrics.navRet ?? 0,
+    issueNav: 0,
+    oneYearReturn: null,
+    dividendDays: 0,
+    initiationDate: null,
+    rangeReturn: metrics.rangeReturn ?? null,
+    rangeSource: 'tsetmc',
+    marketReturnStartDate: metrics.marketReturnStartDate ?? null,
+    marketReturnEndDate: metrics.marketReturnEndDate ?? null,
+    comp: { stock: 100, bond: 0, cash: 0, deposit: 0, other: 0 },
+    website: null,
+    dataDate: null,
+  }
+}
 
 export default function FundCategoryPage({
   typeId,
@@ -20,14 +91,40 @@ export default function FundCategoryPage({
   footnote,
   excludeColumns = [],
   splitByTradingType = false,
+  supplementalFunds = [],
 }) {
   const { funds, startDate, endDate, loading, error, startISO, endISO, setStartISO, setEndISO } = useRangeFunds()
   const [tab, setTab] = useState('etf')
+  const [supplementalMetrics, setSupplementalMetrics] = useState({})
 
-  const allRows = useMemo(
-    () => enrichFunds(funds.filter((f) => f.type === typeId && !f.isCharity), endDate || endISO),
-    [funds, typeId, endDate, endISO]
-  )
+  useEffect(() => {
+    if (!supplementalFunds.length) {
+      setSupplementalMetrics({})
+      return undefined
+    }
+    let cancelled = false
+    Promise.all(supplementalFunds.map(async (fund) => {
+      try {
+        return [fund.insCode, await fetchSupplementalMetric(fund, startISO, endISO)]
+      } catch {
+        return [fund.insCode, null]
+      }
+    })).then((entries) => {
+      if (!cancelled) setSupplementalMetrics(Object.fromEntries(entries.filter(([, value]) => value)))
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [supplementalFunds, startISO, endISO])
+
+  const allRows = useMemo(() => {
+    const baseRows = funds.filter((f) => f.type === typeId && !f.isCharity)
+    const seen = new Set(baseRows.flatMap((fund) => [fund.insCode, normalizeSymbol(fund.symbol)]).filter(Boolean))
+    const supplemental = supplementalFunds
+      .filter((fund) => !seen.has(fund.insCode) && !seen.has(normalizeSymbol(fund.symbol)))
+      .map((fund) => buildSupplementalFund(fund, typeId, supplementalMetrics[fund.insCode]))
+    return enrichFunds([...baseRows, ...supplemental], endDate || endISO)
+  }, [funds, typeId, endDate, endISO, supplementalFunds, supplementalMetrics])
   const etfRows = useMemo(() => allRows.filter((fund) => fund.isETF), [allRows])
   const issuanceRows = useMemo(() => allRows.filter((fund) => !fund.isETF), [allRows])
   const sourceRows = splitByTradingType
