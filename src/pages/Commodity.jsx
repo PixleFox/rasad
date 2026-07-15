@@ -29,6 +29,10 @@ const tseDateToISO = (date) => {
   return value.length === 8 ? `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}` : null
 }
 
+const cleanSupplementalName = (value) => normalizeText(value)
+  .replace(/\s*(?:[-–—]\s*)?(?:\d+|[۰-۹]+|[٠-٩]+|یک|يک|اول|دوم|سوم|چهارم|پنجم|ششم)\s*$/g, '')
+  .trim()
+
 const subtypeBySymbol = {
   سینرژی: 'energy',
   سیگلو: 'silver',
@@ -57,56 +61,56 @@ const supplementalSilverFunds = [
     regNo: 'tsetmc-10098482000925815',
     name: 'کالای آشنای یک',
     symbol: 'سیگلو',
-    manager: '',
+    manager: 'آشنا',
     insCode: '10098482000925815',
   },
   {
     regNo: 'tsetmc-18156575395080321',
     name: 'بازده نقره نوا',
     symbol: 'سیلور',
-    manager: '',
+    manager: 'بازده',
     insCode: '18156575395080321',
   },
   {
     regNo: 'tsetmc-33761569293467411',
     name: 'نقره سیمین هوبر',
     symbol: 'سیمین',
-    manager: '',
+    manager: 'هامرز',
     insCode: '33761569293467411',
   },
   {
     regNo: 'tsetmc-8620139816622134',
     name: 'کالای کهکشان فیروزه یک',
     symbol: 'نقرابی',
-    manager: '',
+    manager: 'توسعه فیروزه',
     insCode: '8620139816622134',
   },
   {
     regNo: 'tsetmc-41483334879559487',
     name: 'کالای کهربا یک',
     symbol: 'نقران',
-    manager: '',
+    manager: 'کاریزما',
     insCode: '41483334879559487',
   },
   {
     regNo: 'tsetmc-47717365931256099',
     name: 'کالای پارسیان یک',
     symbol: 'نقرسا',
-    manager: '',
+    manager: 'لوتوس پارسیان',
     insCode: '47717365931256099',
   },
   {
     regNo: 'tsetmc-30714541738317499',
     name: 'کالای تابان تمدن یک',
     symbol: 'نقرفام',
-    manager: '',
+    manager: 'تمدن',
     insCode: '30714541738317499',
   },
   {
     regNo: 'tsetmc-12590355983583239',
     name: 'کالای نوویرا یک',
     symbol: 'نقرین',
-    manager: '',
+    manager: 'نوویرا',
     insCode: '12590355983583239',
   },
 ]
@@ -114,6 +118,7 @@ const supplementalSilverFunds = [
 function buildSupplementalFund(item, metrics = {}) {
   return {
     ...item,
+    name: cleanSupplementalName(item.name),
     id: item.regNo,
     type: 5,
     typeLabel: 'کالایی',

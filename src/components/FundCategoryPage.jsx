@@ -20,6 +20,10 @@ const normalizeSymbol = (value) => String(value || '')
   .replace(/\s+/g, ' ')
   .trim()
 
+const cleanSupplementalName = (value) => normalizeSymbol(value)
+  .replace(/\s*(?:[-–—]\s*)?(?:\d+|[۰-۹]+|[٠-٩]+|یک|يک|اول|دوم|سوم|چهارم|پنجم|ششم)\s*$/g, '')
+  .trim()
+
 function nearestDailyPrice(dailyList, iso) {
   const target = isoToTseDate(iso)
   return [...dailyList]
@@ -53,6 +57,7 @@ async function fetchSupplementalMetric(fund, startISO, endISO) {
 function buildSupplementalFund(item, typeId, metrics = {}) {
   return {
     ...item,
+    name: cleanSupplementalName(item.name),
     regNo: item.regNo || `tsetmc-${item.insCode}`,
     id: item.regNo || `tsetmc-${item.insCode}`,
     type: typeId,
