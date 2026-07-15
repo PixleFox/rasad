@@ -166,15 +166,9 @@ export default function FundCategoryPage({
     const patchedBaseRows = typeof patchRow === 'function'
       ? baseRows.map((fund) => patchRow(fund))
       : baseRows
-    const seen = new Set(patchedBaseRows.flatMap((fund) => [fund.insCode, normalizeSymbol(fund.symbol)]).filter(Boolean))
-    const baseNames = patchedBaseRows.map((fund) => normalizeSymbol(fund.name)).filter(Boolean)
+    const seen = new Set(baseRows.flatMap((fund) => [fund.insCode, normalizeSymbol(fund.symbol)]).filter(Boolean))
     const supplemental = supplementalFunds
-      .filter((fund) => {
-        const cleanName = normalizeSymbol(cleanSupplementalName(fund.name))
-        return !seen.has(fund.insCode) &&
-          !seen.has(normalizeSymbol(fund.symbol)) &&
-          !baseNames.some((name) => name === cleanName || name.includes(cleanName) || cleanName.includes(name))
-      })
+      .filter((fund) => !seen.has(fund.insCode) && !seen.has(normalizeSymbol(fund.symbol)))
       .map((fund) => buildSupplementalFund(fund, typeId, supplementalMetrics[fund.insCode]))
     return enrichFunds([...patchedBaseRows, ...supplemental], endDate || endISO)
       .map((fund) => ({
