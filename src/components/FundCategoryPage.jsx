@@ -97,10 +97,45 @@ export default function FundCategoryPage({
   excludeColumns = [],
   splitByTradingType = false,
   supplementalFunds = [],
+  includeLeveragedRatio = false,
 }) {
   const { funds, startDate, endDate, loading, error, startISO, endISO, setStartISO, setEndISO } = useRangeFunds()
   const [tab, setTab] = useState('etf')
   const [supplementalMetrics, setSupplementalMetrics] = useState({})
+  const [leveragedRatios, setLeveragedRatios] = useState({})
+
+  const leveragedRegNos = useMemo(
+    () => includeLeveragedRatio
+      ? funds.filter((fund) => fund.type === typeId && !fund.isCharity && fund.regNo).map((fund) => String(fund.regNo)).sort()
+      : [],
+    [funds, typeId, includeLeveragedRatio]
+  )
+
+  useEffect(() => {
+    if (!includeLeveragedRatio || !leveragedRegNos.length) {
+      setLeveragedRatios({})
+      return undefined
+    }
+    let cancelled = false
+    Promise.all(leveragedRegNos.map(async (regNo) => {
+      try {
+        const response = await fetch(`/fipiran/fund/getfund?regno=${encodeURIComponent(regNo)}`)
+        if (!response.ok) return [regNo, null]
+        const data = await response.json()
+        const item = data.item || data
+        const base = Number(item?.baseUnitsTotalNetAssetValue)
+        const superValue = Number(item?.superUnitsTotalNetAssetValue)
+        return [regNo, base > 0 && superValue > 0 ? base / superValue : null]
+      } catch {
+        return [regNo, null]
+      }
+    })).then((entries) => {
+      if (!cancelled) setLeveragedRatios(Object.fromEntries(entries.filter(([, value]) => Number.isFinite(value))))
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [includeLeveragedRatio, leveragedRegNos.join('|')])
 
   useEffect(() => {
     if (!supplementalFunds.length) {
@@ -129,7 +164,11 @@ export default function FundCategoryPage({
       .filter((fund) => !seen.has(fund.insCode) && !seen.has(normalizeSymbol(fund.symbol)))
       .map((fund) => buildSupplementalFund(fund, typeId, supplementalMetrics[fund.insCode]))
     return enrichFunds([...baseRows, ...supplemental], endDate || endISO)
-  }, [funds, typeId, endDate, endISO, supplementalFunds, supplementalMetrics])
+      .map((fund) => ({
+        ...fund,
+        leveragedRatio: leveragedRatios[String(fund.regNo)] ?? null,
+      }))
+  }, [funds, typeId, endDate, endISO, supplementalFunds, supplementalMetrics, leveragedRatios])
   const etfRows = useMemo(() => allRows.filter((fund) => fund.isETF), [allRows])
   const issuanceRows = useMemo(() => allRows.filter((fund) => !fund.isETF), [allRows])
   const sourceRows = splitByTradingType
@@ -143,9 +182,27 @@ export default function FundCategoryPage({
         excluded.add('symbol')
         excluded.add('bubble')
       }
-      return excluded.size ? otherFundsColumns.filter((c) => !excluded.has(c.key)) : otherFundsColumns
+      const baseColumns = excluded.size ? otherFundsColumns.filter((c) => !excluded.has(c.key)) : otherFundsColumns
+      if (!includeLeveragedRatio) return baseColumns
+      const ratioColumn = {
+        key: 'leveragedRatio',
+        label: 'نسبت اهرمی کلاسیک',
+        sortVal: (fund) => fund.leveragedRatio,
+        exportValue: (fund) => fund.leveragedRatio,
+        render: (fund) => Number.isFinite(fund.leveragedRatio) ? (
+          <span className="text-sm font-dana tabular-nums text-neon-pink" style={{ fontWeight: 900 }}>
+            {fund.leveragedRatio.toLocaleString('fa-IR', { maximumFractionDigits: 2 })}×
+          </span>
+        ) : (
+          <span className="text-text-muted/40 text-xs">—</span>
+        ),
+      }
+      const scoreIndex = baseColumns.findIndex((column) => column.key === 'score')
+      return scoreIndex >= 0
+        ? [...baseColumns.slice(0, scoreIndex), ratioColumn, ...baseColumns.slice(scoreIndex)]
+        : [...baseColumns, ratioColumn]
     },
-    [excludeColumns, splitByTradingType, tab]
+    [excludeColumns, splitByTradingType, tab, includeLeveragedRatio]
   )
   const marketRows = useMarketBubbles(sourceRows)
   const getTabCount = (id) => (id === 'etf' ? etfRows.length : issuanceRows.length)

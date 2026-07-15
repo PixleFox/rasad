@@ -11,6 +11,7 @@ export default function Leveraged() {
       subtitle="پرریسک‌ترین دسته — بازدهی چندبرابری در هر دو جهت"
       floatAsset="/assets/Purple-planet.png"
       footnote="منبع: فیپیران · سطح ریسک از ترکیب دارایی (۰ تا ۱۰۰) · شاخص رصد امتیاز اختصاصی ۱۰ تا ۱۰۰ است."
+      includeLeveragedRatio
     />
   )
 }
