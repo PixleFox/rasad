@@ -5,7 +5,9 @@ import { fetchFundCompare, fetchRangeReturns, faNum, monthsBeforeISO, todayISO }
 const TSETMC = '/tsetmc'
 const REFRESH_SECONDS = 20
 const AVG_DAYS = 20
+const HISTORY_DAYS = 40
 const CONCURRENCY = 12
+const FIXED_NEGATIVE_FLOW_VOLUME_PCT = 1.1
 
 const PRODUCTS = [
   {
@@ -72,6 +74,10 @@ const fa = (number, decimals = 1) => Number.isFinite(Number(number))
 
 const signedBT = (number) => Number.isFinite(Number(number))
   ? `${Number(number) >= 0 ? '+' : ''}${fa(number)} میلیارد`
+  : '—'
+
+const absBT = (number) => Number.isFinite(Number(number))
+  ? `${fa(Math.abs(Number(number)))} میلیارد`
   : '—'
 
 const fmtTime = (date) => date?.toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) || '—'
@@ -143,6 +149,23 @@ async function fetchFundMarket(fund) {
   }
 }
 
+const validDailyRows = (rows) => (Array.isArray(rows) ? rows : [])
+  .filter((row) => Number(row?.pClosing) > 0 && Number(row?.qTotTran5J) >= 0)
+  .sort((a, b) => Number(b.dEven) - Number(a.dEven))
+
+async function fetchFundAverageTradeValue(fund) {
+  try {
+    const payload = await tse(`ClosingPrice/GetClosingPriceDailyList/${fund.insCode}/${HISTORY_DAYS}`, { timeout: 9000 })
+    const daily = validDailyRows(payload.closingPriceDaily)
+      .filter((row) => Number(row.qTotTran5J) > 0)
+      .slice(0, AVG_DAYS)
+      .map((row) => (Number(row.qTotTran5J) * Number(row.pClosing)) / 1e10)
+    return daily.length ? daily.reduce((sum, value) => sum + value, 0) / daily.length : null
+  } catch {
+    return null
+  }
+}
+
 function aggregateMarkets(markets) {
   const valid = markets.filter(Boolean)
   return {
@@ -179,6 +202,7 @@ export default function Triggers() {
   const [liveError, setLiveError] = useState('')
   const fundsByProduct = useRef({})
   const averageFlowByProduct = useRef({})
+  const averageTradeByProduct = useRef({})
   const refreshLock = useRef(false)
   const mounted = useRef(true)
   const hasRows = useRef(false)
@@ -187,25 +211,34 @@ export default function Triggers() {
     return PRODUCTS.map((product) => {
       const aggregate = aggregates[product.id] || { ok: 0, netFlow: null }
       const averageFlow = averageFlowByProduct.current[product.id]
-      const triggerThreshold = Number.isFinite(averageFlow) && averageFlow !== 0
-        ? averageFlow * product.triggerPct
-        : null
+      const averageTradeValue = averageTradeByProduct.current[product.id]
+      const isFixedNegativeFlow = product.id === 'fixed' && Number.isFinite(averageFlow) && averageFlow < 0
+      const triggerThreshold = isFixedNegativeFlow
+        ? (Number.isFinite(averageTradeValue) && averageTradeValue > 0 ? averageTradeValue * FIXED_NEGATIVE_FLOW_VOLUME_PCT : null)
+        : (Number.isFinite(averageFlow) && averageFlow !== 0 ? Math.abs(averageFlow) * product.triggerPct : null)
+      const triggerCurrent = isFixedNegativeFlow && Number.isFinite(aggregate.netFlow)
+        ? Math.max(0, -aggregate.netFlow)
+        : aggregate.netFlow
       const targetTriggered = Number.isFinite(aggregate.netFlow) &&
         Number.isFinite(triggerThreshold) &&
         triggerThreshold > 0 &&
-        aggregate.netFlow >= triggerThreshold
+        (isFixedNegativeFlow ? aggregate.netFlow <= -triggerThreshold : aggregate.netFlow >= triggerThreshold)
       const window = windowState(product)
       const go = targetTriggered
       const watch = !go && (
         Number.isFinite(aggregate.netFlow) &&
         Number.isFinite(triggerThreshold) &&
         triggerThreshold > 0 &&
-        aggregate.netFlow >= triggerThreshold * 0.65
+        (isFixedNegativeFlow ? aggregate.netFlow <= -triggerThreshold * 0.65 : aggregate.netFlow >= triggerThreshold * 0.65)
       )
       return {
         ...product,
         ...aggregate,
         triggerThreshold,
+        triggerCurrent,
+        triggerMode: isFixedNegativeFlow ? 'outflow' : 'inflow',
+        triggerPctLabel: isFixedNegativeFlow ? '۱۱۰٪ حجم' : `${fa(product.triggerPct * 100, 0)}٪`,
+        averageTradeValue,
         averageFlow,
         targetTriggered,
         window,
@@ -274,6 +307,14 @@ export default function Triggers() {
         )
         averageFlowByProduct.current[product.id] = calcAverageDailyFlow(rangeFunds)
       }
+      if (averageFlowByProduct.current.fixed < 0) {
+        const tradeValues = await mapLimit(fundsByProduct.current.fixed || [], CONCURRENCY, fetchFundAverageTradeValue)
+        averageTradeByProduct.current.fixed = tradeValues
+          .filter(Number.isFinite)
+          .reduce((sum, value) => sum + value, 0)
+      } else {
+        averageTradeByProduct.current.fixed = null
+      }
       await refreshLive({ initial: true })
     } catch {
       if (mounted.current) setPhase('error')
@@ -321,7 +362,7 @@ export default function Triggers() {
             <div className="mb-2 flex items-center gap-2 text-xs text-cyan-400"><Radio size={15} />پایش زنده جریان پول</div>
             <h1 className="text-xl text-slate-100 sm:text-2xl" style={{ fontWeight: 900 }}>تریگر تبلیغات صندوق‌ها</h1>
             <p className="mt-2 max-w-2xl text-xs leading-6 text-slate-500">
-              شرط تصمیم: ورود پول امروز باید از درصد مشخصی از میانگین ورود پول ماه اخیر همان گروه عبور کند.
+              شرط تصمیم: ورود پول امروز از حد تریگر همان گروه عبور کند؛ برای درآمد ثابت با میانگین ورود منفی، حد تریگر بر اساس ۱۱۰٪ میانگین ارزش معاملات روزانه ۲۰ روز کاری اخیر است.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -362,8 +403,8 @@ export default function Triggers() {
             )}
             <div className="grid gap-3">
               {rows.map((row) => {
-                const flowRatio = Number.isFinite(row.netFlow) && Number.isFinite(row.triggerThreshold) && row.triggerThreshold > 0
-                  ? row.netFlow / row.triggerThreshold
+                const flowRatio = Number.isFinite(row.triggerCurrent) && Number.isFinite(row.triggerThreshold) && row.triggerThreshold > 0
+                  ? row.triggerCurrent / row.triggerThreshold
                   : 0
                 const flowWidth = `${Math.max(0, Math.min(flowRatio * 100, 100))}%`
                 const decisionColor = row.decision === 'go' ? '#22C55E' : row.decision === 'watch' ? '#F59E0B' : '#64748B'
@@ -382,8 +423,8 @@ export default function Triggers() {
                       </div>
 
                       <Metric label="میانگین ورود پول" value={signedBT(row.averageFlow)} color={row.averageFlow >= 0 ? '#CBD5E1' : '#94A3B8'} />
-                      <Metric label="درصد تریگر" value={`${fa(row.triggerPct * 100, 0)}٪`} />
-                      <Metric label="حد تریگر" value={signedBT(row.triggerThreshold)} color={row.triggerThreshold >= 0 ? '#CBD5E1' : '#EF4444'} />
+                      <Metric label="درصد تریگر" value={row.triggerPctLabel} />
+                      <Metric label="حد تریگر" value={absBT(row.triggerThreshold)} />
                       <Metric label="ورود پول امروز" value={signedBT(row.netFlow)} color={row.netFlow >= 0 ? '#22C55E' : '#EF4444'} />
 
                       <div className="flex justify-start lg:justify-center">
@@ -392,14 +433,14 @@ export default function Triggers() {
                     </div>
 
                     <div className="mt-4">
-                      <Bar label="نسبت ورود پول امروز به حد تریگر" width={flowWidth} color={decisionColor} />
+                      <Bar label={row.triggerMode === 'outflow' ? 'نسبت خروج پول امروز به حد تریگر' : 'نسبت ورود پول امروز به حد تریگر'} width={flowWidth} color={decisionColor} />
                     </div>
                   </article>
                 )
               })}
             </div>
             <footer className="mt-5 flex flex-col gap-2 text-[0.65rem] text-slate-600 sm:flex-row sm:items-center sm:justify-between">
-              <span>ارقام: میلیارد تومان · ورود پول امروز: TSETMC · میانگین ورود پول: فیپیران</span>
+              <span>ارقام: میلیارد تومان · ورود پول امروز: TSETMC · میانگین ورود پول: فیپیران · حجم ۲۰ روزه: TSETMC</span>
               <span>آخرین داده سالم: {fmtTime(updatedAt)}</span>
             </footer>
           </>
