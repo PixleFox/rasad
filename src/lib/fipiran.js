@@ -1,6 +1,7 @@
 // ── Fipiran data layer ──────────────────────────────────────────────────────
 // Fund snapshots are served by Rasad's API. The server persists Fipiran data,
 // merges sparse reporting days, and only contacts the source when data is absent.
+import { supplementalTsetmcFunds } from '../data/supplementalTsetmcFunds'
 
 // fundType numeric codes → Persian labels (derived from live data sampling)
 export const FUND_TYPES = {
@@ -151,6 +152,85 @@ function normalize(it) {
     website: Array.isArray(it.websiteAddress) ? it.websiteAddress[0] : it.websiteAddress || null,
     dataDate: it._rasadDataDate || null,
   }
+}
+
+const normalizeSymbolKey = (value) => String(value || '')
+  .replace(/[يى]/g, 'ی')
+  .replace(/ك/g, 'ک')
+  .replace(/\s+/g, ' ')
+  .trim()
+
+const cleanSupplementalName = (value) => normalizeSymbolKey(value)
+  .replace(/\s*(?:[-–—]\s*)?(?:\d+|[۰-۹]+|[٠-٩]+|یک|يک|اول|دوم|سوم|چهارم|پنجم|ششم)\s*$/g, '')
+  .trim()
+
+function buildSupplementalTsetmcFund(item, metrics = {}) {
+  const type = Number(item.type)
+  return {
+    ...item,
+    name: cleanSupplementalName(item.name),
+    regNo: item.regNo || `tsetmc-${item.insCode}`,
+    id: item.regNo || `tsetmc-${item.insCode}`,
+    type,
+    typeLabel: FUND_TYPES[type] || 'سایر',
+    isCharity: false,
+    isETF: true,
+    isSupplementalTsetmc: true,
+    sizeRial: metrics.sizeRial ?? 0,
+    units: metrics.units ?? 0,
+    navRet: metrics.navRet ?? 0,
+    statNav: 0,
+    cancelNav: metrics.navRet ?? 0,
+    issueNav: 0,
+    oneYearReturn: null,
+    dividendDays: 0,
+    initiationDate: null,
+    rangeReturn: metrics.rangeReturn ?? null,
+    rangeSource: metrics.rangeReturn != null ? 'tsetmc' : 'registry',
+    marketReturnStartDate: metrics.marketReturnStartDate ?? null,
+    marketReturnEndDate: metrics.marketReturnEndDate ?? null,
+    rangeDayCount: metrics.rangeDayCount ?? null,
+    comp: type === 21
+      ? { stock: 100, bond: 0, cash: 0, deposit: 0, other: 0 }
+      : { stock: 0, bond: 0, cash: 0, deposit: 0, other: 100 },
+    website: null,
+    dataDate: metrics.dataDate ?? null,
+    stale: false,
+    staleDate: null,
+  }
+}
+
+const supplementalTsetmcByInsCode = new Map(supplementalTsetmcFunds.map((fund) => [String(fund.insCode), fund]))
+
+function appendMissingSupplementalFunds(funds, metricsByInsCode = new Map()) {
+  const seen = new Set(
+    funds.flatMap((fund) => [fund.insCode && String(fund.insCode), normalizeSymbolKey(fund.symbol)]).filter(Boolean)
+  )
+  const supplemental = supplementalTsetmcFunds
+    .filter((fund) => !seen.has(String(fund.insCode)) && !seen.has(normalizeSymbolKey(fund.symbol)))
+    .map((fund) => buildSupplementalTsetmcFund(fund, metricsByInsCode.get(String(fund.insCode))))
+  return supplemental.length ? [...funds, ...supplemental] : funds
+}
+
+function mergeSupplementalMetrics(funds, metricsByInsCode = new Map()) {
+  const merged = funds.map((fund) => {
+    const metric = fund.insCode ? metricsByInsCode.get(String(fund.insCode)) : null
+    if (!metric || !supplementalTsetmcByInsCode.has(String(fund.insCode))) return fund
+    return {
+      ...fund,
+      sizeRial: metric.sizeRial ?? fund.sizeRial,
+      units: metric.units ?? fund.units,
+      navRet: metric.navRet ?? fund.navRet,
+      cancelNav: metric.navRet ?? fund.cancelNav,
+      rangeReturn: metric.rangeReturn ?? fund.rangeReturn,
+      rangeSource: metric.rangeReturn != null ? 'tsetmc' : fund.rangeSource,
+      marketReturnStartDate: metric.marketReturnStartDate ?? fund.marketReturnStartDate,
+      marketReturnEndDate: metric.marketReturnEndDate ?? fund.marketReturnEndDate,
+      rangeDayCount: metric.rangeDayCount ?? fund.rangeDayCount,
+      dataDate: metric.dataDate ?? fund.dataDate,
+    }
+  })
+  return appendMissingSupplementalFunds(merged, metricsByInsCode)
 }
 
 // ── TSETMC Market Quality ─────────────────────────────────────────────────────
@@ -395,6 +475,50 @@ async function fetchEtfMarketRangeReturn(fund, startISO, endISO, priceField) {
   }
 }
 
+async function fetchSupplementalTsetmcMetric(fund, startISO, endISO) {
+  if (!fund?.insCode) return null
+  const count = Math.min(500, Math.max(60, daysBetween(startISO, endISO) + 35))
+  const [infoPayload, etfPayload, dailyList] = await Promise.all([
+    _fetchTsetmc(`Instrument/GetInstrumentInfo/${fund.insCode}`).catch(() => null),
+    _fetchTsetmc(`Fund/GetETFByInsCode/${fund.insCode}`).catch(() => null),
+    fetchTsetmcDailyList(fund.insCode, count).catch(() => []),
+  ])
+  const info = infoPayload?.instrumentInfo
+  const etf = etfPayload?.etf
+  const units = Number(info?.etfIssuedUnit) || Number(info?.zTitad) || 0
+  const nav = Number(etf?.pRedTran) || 0
+  const startRow = pickDailyOnOrBefore(dailyList, startISO, 'pDrCotVal')
+  const endRow = pickDailyOnOrBefore(dailyList, endISO, 'pDrCotVal')
+  const startPrice = Number(startRow?.pDrCotVal)
+  const endPrice = Number(endRow?.pDrCotVal)
+  const marketReturnStartDate = tseDateToISO(startRow?.dEven)
+  const marketReturnEndDate = tseDateToISO(endRow?.dEven)
+  const rangeDayCount = marketReturnStartDate && marketReturnEndDate
+    ? daysBetween(marketReturnStartDate, marketReturnEndDate)
+    : null
+  return {
+    units,
+    navRet: nav,
+    sizeRial: units > 0 && nav > 0 ? units * nav : 0,
+    rangeReturn: startPrice > 0 && endPrice > 0 ? (endPrice / startPrice - 1) * 100 : null,
+    marketReturnStartDate,
+    marketReturnEndDate,
+    rangeDayCount,
+    dataDate: marketReturnEndDate,
+  }
+}
+
+async function fetchSupplementalTsetmcMetrics(startISO, endISO) {
+  const entries = await mapWithConcurrency(supplementalTsetmcFunds, 6, async (fund) => {
+    try {
+      return [String(fund.insCode), await fetchSupplementalTsetmcMetric(fund, startISO, endISO)]
+    } catch {
+      return [String(fund.insCode), null]
+    }
+  })
+  return new Map(entries.filter(([, metric]) => metric))
+}
+
 export async function fetchEtfDividendEvent(fund, endISO, priceField = 'pDrCotVal') {
   if (!fund?.insCode) return null
   const dailyList = await fetchTsetmcDailyList(fund.insCode, 120)
@@ -469,12 +593,14 @@ export function fetchFundCompare(startDate) {
 
   const promise = (async () => {
     const payload = await fetchSnapshotFromServer(startDate)
-    const funds = (payload.items || []).map(normalize).map((fund) => ({
+    const normalizedFunds = (payload.items || []).map(normalize).map((fund) => ({
       ...fund,
       stale: fund.dataDate !== payload.date,
       staleDate: fund.dataDate !== payload.date ? fund.dataDate : null,
       dataDate: fund.dataDate || payload.date,
     }))
+    const supplementalMetrics = await fetchSupplementalTsetmcMetrics(payload.date, payload.date)
+    const funds = mergeSupplementalMetrics(normalizedFunds, supplementalMetrics)
     const out = {
       date: payload.date,
       funds,
@@ -540,6 +666,9 @@ export async function fetchRangeReturns(startISO, endISO, options = {}) {
     })
     outFunds = funds.map((fund) => marketByRegNo.has(fund.regNo) ? { ...fund, ...marketByRegNo.get(fund.regNo) } : fund)
   }
+
+  const supplementalMetrics = await fetchSupplementalTsetmcMetrics(startISO, endISO)
+  outFunds = mergeSupplementalMetrics(outFunds, supplementalMetrics)
 
   return {
     startDate: startSnap.date,
