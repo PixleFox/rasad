@@ -1,30 +1,96 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { AlertTriangle, RefreshCw, Radio, WifiOff } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { AlertTriangle, CheckCircle2, Clock3, Radio, RefreshCw, WifiOff } from 'lucide-react'
+import { fetchFundCompare, faNum, todayISO } from '../lib/fipiran'
 
 const TSETMC = '/tsetmc'
-const OPEN_REFRESH = 20
-const CLOSED_REFRESH = 180
-const MAX_FUNDS = 100
+const REFRESH_SECONDS = 20
+const HISTORY_DAYS = 40
+const AVG_DAYS = 20
+const CONCURRENCY = 12
 
-const TYPES = [
-  { id: 4, label: 'درآمد ثابت', multPos: 2, multNeg: 1.1 },
-  { id: 6, label: 'سهامی', multPos: 2, multNeg: 1.1 },
-  { id: 21, label: 'بخشی', multPos: 2.5, multNeg: 1.1 },
-  { id: 7, label: 'مختلط', multPos: 2, multNeg: 1.1 },
-  { id: 5, label: 'کالایی/طلا', multPos: 2, multNeg: 1.1 },
+const PRODUCTS = [
+  {
+    id: 'fixed',
+    typeId: 4,
+    label: 'صندوق‌های درآمد ثابت',
+    short: 'درآمد ثابت',
+    color: '#00FF9D',
+    triggerPct: 0.2,
+    tradeProgressPct: 0.3,
+    windowStart: '09:00',
+    windowEnd: '11:00',
+    actionTime: '11:30',
+  },
+  {
+    id: 'equity',
+    typeId: 6,
+    label: 'صندوق‌های سهامی',
+    short: 'سهامی',
+    color: '#00D4FF',
+    triggerPct: 0.2,
+    tradeProgressPct: 0.3,
+    windowStart: '09:00',
+    windowEnd: '10:00',
+    actionTime: '10:30',
+  },
+  {
+    id: 'sector',
+    typeId: 21,
+    label: 'صندوق‌های بخشی',
+    short: 'بخشی',
+    color: '#34D399',
+    triggerPct: 0.25,
+    tradeProgressPct: 0.3,
+    windowStart: '09:00',
+    windowEnd: '10:00',
+    actionTime: '10:30',
+  },
+  {
+    id: 'mixed',
+    typeId: 7,
+    label: 'صندوق‌های مختلط',
+    short: 'مختلط',
+    color: '#A78BFA',
+    triggerPct: 0.2,
+    tradeProgressPct: 0.3,
+    windowStart: '09:00',
+    windowEnd: '10:00',
+    actionTime: '10:30',
+  },
+  {
+    id: 'gold',
+    typeId: 5,
+    label: 'صندوق‌های طلا',
+    short: 'طلا',
+    color: '#FBBF24',
+    triggerPct: 0.2,
+    tradeProgressPct: 0.21,
+    windowStart: '12:00',
+    windowEnd: '13:00',
+    actionTime: '13:30',
+    filter: (fund) => /طلا|زر|گوهر|عیار|مثقال|ناب|گنج|کهربا|آتش|درنا|لیان|نهال|زمرد|تابش|امرالد|ریتُن|ریتون/.test(`${fund.name || ''} ${fund.symbol || ''}`),
+  },
 ]
+
+const FIXED_OUTFLOW_PCT = 0.11
 
 const fa = (number, decimals = 1) => Number.isFinite(Number(number))
   ? Number(number).toLocaleString('fa-IR', { maximumFractionDigits: decimals, minimumFractionDigits: decimals })
   : '—'
 
 const fmtTime = (date) => date?.toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) || '—'
+const timeToMinutes = (time) => {
+  const [hour, minute] = time.split(':').map(Number)
+  return hour * 60 + minute
+}
 
-function marketIsOpen(date = new Date()) {
-  const day = date.getDay()
+function windowState(product, date = new Date()) {
   const minute = date.getHours() * 60 + date.getMinutes()
-  const tradingDay = day === 6 || (day >= 0 && day <= 3) // Saturday through Wednesday
-  return tradingDay && minute >= 525 && minute <= 755
+  const start = timeToMinutes(product.windowStart)
+  const end = timeToMinutes(product.windowEnd)
+  if (minute < start) return 'waiting'
+  if (minute <= end) return 'active'
+  return 'closed'
 }
 
 async function tse(path, { timeout = 9000, attempts = 2 } = {}) {
@@ -45,69 +111,153 @@ async function tse(path, { timeout = 9000, attempts = 2 } = {}) {
   throw lastError
 }
 
+async function mapLimit(items, limit, mapper) {
+  const out = new Array(items.length)
+  let next = 0
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const index = next
+      next += 1
+      out[index] = await mapper(items[index], index)
+    }
+  }))
+  return out
+}
+
+const validDailyRows = (rows) => (Array.isArray(rows) ? rows : [])
+  .filter((row) => Number(row?.pClosing) > 0 && Number(row?.qTotTran5J) >= 0)
+  .sort((a, b) => Number(b.dEven) - Number(a.dEven))
+
+async function fetchFundMarket(fund) {
+  try {
+    const [clientPayload, pricePayload, dailyPayload] = await Promise.all([
+      tse(`ClientType/GetClientType/${fund.insCode}/1/0`, { timeout: 7000 }),
+      tse(`ClosingPrice/GetClosingPriceInfo/${fund.insCode}`, { timeout: 7000 }),
+      tse(`ClosingPrice/GetClosingPriceDailyList/${fund.insCode}/${HISTORY_DAYS}`, { timeout: 9000 }),
+    ])
+    const client = clientPayload.clientType
+    const price = pricePayload.closingPriceInfo
+    if (!client || !price) return null
+
+    const livePrice = Number(price.pClosing) || Number(price.pDrCotVal) || Number(fund.navRet) || 0
+    const netVolume = (Number(client.buy_I_Volume) || 0) - (Number(client.sell_I_Volume) || 0)
+    const todayTradeValue = ((Number(price.qTotTran5J) || 0) * livePrice) / 1e10
+    const netFlow = (netVolume * livePrice) / 1e10
+    const daily = validDailyRows(dailyPayload.closingPriceDaily)
+      .filter((row) => Number(row.qTotTran5J) > 0)
+      .slice(0, AVG_DAYS)
+      .map((row) => (Number(row.qTotTran5J) * Number(row.pClosing)) / 1e10)
+    const avgTradeValue = daily.length ? daily.reduce((sum, value) => sum + value, 0) / daily.length : null
+
+    return {
+      insCode: fund.insCode,
+      netFlow,
+      todayTradeValue,
+      avgTradeValue,
+    }
+  } catch {
+    return null
+  }
+}
+
+function aggregateMarkets(markets) {
+  const valid = markets.filter(Boolean)
+  const avgValues = valid.map((item) => item.avgTradeValue).filter(Number.isFinite)
+  return {
+    ok: valid.length,
+    netFlow: valid.reduce((sum, item) => sum + item.netFlow, 0),
+    todayTradeValue: valid.reduce((sum, item) => sum + item.todayTradeValue, 0),
+    avgTradeValue: avgValues.reduce((sum, value) => sum + value, 0),
+  }
+}
+
+function TriggerBadge({ state }) {
+  if (state === 'go') {
+    return <span className="inline-flex items-center gap-1 rounded-lg border border-emerald-400/25 bg-emerald-400/10 px-3 py-1.5 text-xs text-emerald-300" style={{ fontWeight: 900 }}><CheckCircle2 size={14} />تبلیغ بزن</span>
+  }
+  if (state === 'watch') {
+    return <span className="inline-flex items-center gap-1 rounded-lg border border-amber-300/25 bg-amber-300/10 px-3 py-1.5 text-xs text-amber-300" style={{ fontWeight: 900 }}><AlertTriangle size={14} />نزدیکه</span>
+  }
+  return <span className="inline-flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-slate-500" style={{ fontWeight: 900 }}><Clock3 size={14} />صبر کن</span>
+}
+
 export default function Triggers() {
   const [phase, setPhase] = useState('loading')
   const [rows, setRows] = useState([])
   const [updatedAt, setUpdatedAt] = useState(null)
   const [now, setNow] = useState(new Date())
-  const [countdown, setCountdown] = useState(OPEN_REFRESH)
+  const [countdown, setCountdown] = useState(REFRESH_SECONDS)
   const [refreshing, setRefreshing] = useState(false)
   const [liveError, setLiveError] = useState('')
-  const fundsByType = useRef({})
-  const averageByType = useRef({})
+  const fundsByProduct = useRef({})
   const refreshLock = useRef(false)
   const mounted = useRef(true)
   const hasRows = useRef(false)
 
-  const buildRows = useCallback((flows, coverage) => TYPES.map((type) => {
-    const average = averageByType.current[type.id] ?? 0
-    const today = flows[type.id] ?? 0
-    const threshold = average >= 0 ? average * type.multPos : average * -type.multNeg
-    return {
-      id: type.id,
-      label: type.label,
-      today,
-      average,
-      threshold,
-      ratio: threshold ? today / threshold : 0,
-      coverage: coverage[type.id] ?? 0,
-    }
-  }), [])
+  const buildRows = useCallback((aggregates) => {
+    const fixed = aggregates.fixed
+    const fixedOutflowThreshold = fixed?.avgTradeValue ? -fixed.avgTradeValue * FIXED_OUTFLOW_PCT : null
+    const fixedOutflowTriggered = Number.isFinite(fixed?.netFlow) &&
+      Number.isFinite(fixedOutflowThreshold) &&
+      fixed.netFlow <= fixedOutflowThreshold
 
-  const fetchLive = useCallback(async ({ initial = false } = {}) => {
+    return PRODUCTS.map((product) => {
+      const aggregate = aggregates[product.id] || { ok: 0, netFlow: null, todayTradeValue: null, avgTradeValue: null }
+      const triggerThreshold = Number.isFinite(aggregate.avgTradeValue)
+        ? aggregate.avgTradeValue * product.triggerPct
+        : null
+      const tradeProgress = Number.isFinite(aggregate.avgTradeValue) && aggregate.avgTradeValue > 0
+        ? aggregate.todayTradeValue / aggregate.avgTradeValue
+        : null
+      const targetTriggered = Number.isFinite(aggregate.netFlow) &&
+        Number.isFinite(triggerThreshold) &&
+        aggregate.netFlow >= triggerThreshold
+      const progressReady = Number.isFinite(tradeProgress) && tradeProgress >= product.tradeProgressPct
+      const window = windowState(product)
+      const go = progressReady && (targetTriggered || (product.id !== 'fixed' && fixedOutflowTriggered))
+      const watch = !go && progressReady && (
+        (Number.isFinite(aggregate.netFlow) && Number.isFinite(triggerThreshold) && aggregate.netFlow >= triggerThreshold * 0.65) ||
+        (product.id !== 'fixed' && fixedOutflowTriggered)
+      )
+      return {
+        ...product,
+        ...aggregate,
+        triggerThreshold,
+        fixedOutflowThreshold,
+        fixedOutflowTriggered,
+        targetTriggered,
+        tradeProgress,
+        progressReady,
+        window,
+        decision: go ? 'go' : watch ? 'watch' : 'wait',
+        total: fundsByProduct.current[product.id]?.length || 0,
+      }
+    })
+  }, [])
+
+  const refreshLive = useCallback(async ({ initial = false } = {}) => {
     if (refreshLock.current) return
     refreshLock.current = true
     setRefreshing(true)
     setLiveError('')
     try {
-      const clientPayload = await tse('ClientType/GetClientTypeAll', { timeout: 12000, attempts: 3 })
-      const clientMap = new Map((clientPayload.clientTypeAllDto || []).map((item) => [String(item.insCode), item]))
-      const flows = {}
-      const coverage = {}
-
-      for (const type of TYPES) {
-        const list = fundsByType.current[type.id] || []
-        let total = 0
-        let valid = 0
-        for (const fund of list) {
-          const key = String(fund.insCode)
-          const client = clientMap.get(key)
-          const price = Number(fund.referencePrice)
-          if (!client || !price) continue
-          total += ((client.buy_I_Volume ?? 0) - (client.sell_I_Volume ?? 0)) * price / 1e10
-          valid += 1
-        }
-        flows[type.id] = total
-        coverage[type.id] = list.length ? valid / list.length : 0
-      }
-
+      const aggregates = {}
+      await Promise.all(PRODUCTS.map(async (product) => {
+        const funds = fundsByProduct.current[product.id] || []
+        const markets = await mapLimit(funds, CONCURRENCY, fetchFundMarket)
+        aggregates[product.id] = aggregateMarkets(markets)
+      }))
       if (!mounted.current) return
-      setRows(buildRows(flows, coverage))
-      hasRows.current = true
+      setRows(buildRows(aggregates))
       setUpdatedAt(new Date())
       setPhase('ready')
-      setCountdown(marketIsOpen() ? OPEN_REFRESH : CLOSED_REFRESH)
-      if (Object.values(coverage).some((value) => value < 0.75)) setLiveError('بخشی از نمادها موقتاً پاسخ ندادند؛ اعداد با آخرین قیمت سالم تکمیل شده‌اند.')
+      hasRows.current = true
+      const coverageLow = PRODUCTS.some((product) => {
+        const total = fundsByProduct.current[product.id]?.length || 0
+        const ok = aggregates[product.id]?.ok || 0
+        return total > 0 && ok / total < 0.75
+      })
+      if (coverageLow) setLiveError('بخشی از نمادها از TSETMC پاسخ ندادند؛ برای همان دسته پوشش داده کنار ردیف نمایش داده شده است.')
     } catch {
       if (!mounted.current) return
       if (initial || !hasRows.current) setPhase('error')
@@ -122,19 +272,21 @@ export default function Triggers() {
     setPhase('loading')
     setLiveError('')
     try {
-      const response = await fetch('/api/trigger-baseline', { cache: 'no-store' })
-      if (!response.ok) throw new Error('baseline unavailable')
-      const baseline = await response.json()
-      for (const type of TYPES) {
-        const list = (baseline.fundsByType?.[type.id] || []).slice(0, MAX_FUNDS)
-        fundsByType.current[type.id] = list
-        averageByType.current[type.id] = Number(baseline.averageByType?.[type.id]) || 0
+      const snap = await fetchFundCompare(todayISO())
+      for (const product of PRODUCTS) {
+        fundsByProduct.current[product.id] = snap.funds.filter((fund) =>
+          fund.type === product.typeId &&
+          fund.isETF &&
+          !fund.isCharity &&
+          fund.insCode &&
+          (!product.filter || product.filter(fund))
+        )
       }
-      await fetchLive({ initial: true })
+      await refreshLive({ initial: true })
     } catch {
       if (mounted.current) setPhase('error')
     }
-  }, [fetchLive])
+  }, [refreshLive])
 
   useEffect(() => {
     mounted.current = true
@@ -144,65 +296,151 @@ export default function Triggers() {
 
   useEffect(() => {
     const timer = setInterval(() => {
-      const time = new Date()
-      setNow(time)
+      setNow(new Date())
       setCountdown((value) => {
         if (phase !== 'ready') return value
         if (value <= 1) {
-          fetchLive()
-          return marketIsOpen(time) ? OPEN_REFRESH : CLOSED_REFRESH
+          refreshLive()
+          return REFRESH_SECONDS
         }
         return value - 1
       })
     }, 1000)
     return () => clearInterval(timer)
-  }, [fetchLive, phase])
+  }, [phase, refreshLive])
 
   useEffect(() => {
-    const resume = () => { if (document.visibilityState === 'visible' && phase === 'ready') fetchLive() }
+    const resume = () => { if (document.visibilityState === 'visible' && phase === 'ready') refreshLive() }
     document.addEventListener('visibilitychange', resume)
     window.addEventListener('online', resume)
-    return () => { document.removeEventListener('visibilitychange', resume); window.removeEventListener('online', resume) }
-  }, [fetchLive, phase])
+    return () => {
+      document.removeEventListener('visibilitychange', resume)
+      window.removeEventListener('online', resume)
+    }
+  }, [phase, refreshLive])
 
-  const open = marketIsOpen(now)
+  const readyCount = useMemo(() => rows.filter((row) => row.decision === 'go').length, [rows])
 
-  return <main className="min-h-screen bg-[#07090F] px-4 py-8 font-dana text-slate-300" dir="rtl">
-    <div className="mx-auto max-w-5xl">
-      <header className="mb-7 flex flex-col gap-4 border-b border-slate-800/70 pb-6 sm:flex-row sm:items-center sm:justify-between">
-        <div><div className="mb-2 flex items-center gap-2 text-xs text-cyan-400"><Radio size={15} />پایش زنده جریان پول</div><h1 className="text-xl text-slate-100" style={{ fontWeight: 900 }}>تریگر تبلیغات صندوق‌ها</h1><p className="mt-2 text-xs text-slate-500">خالص خرید حقیقی امروز در مقایسه با میانگین بیست روز معاملاتی</p></div>
-        <div className="flex flex-wrap items-center gap-2 text-xs">
-          <span className={`rounded-md border px-2.5 py-1.5 ${open ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-400' : 'border-slate-700 bg-slate-900 text-slate-500'}`}>{open ? 'بازار باز' : 'بازار بسته'}</span>
-          <span className="rounded-md border border-slate-800 bg-slate-900 px-2.5 py-1.5 tabular-nums text-slate-500">{fmtTime(now)}</span>
-          <button type="button" onClick={() => phase === 'ready' ? fetchLive() : initialize()} disabled={refreshing || phase === 'loading'} className="flex items-center gap-2 rounded-md border border-cyan-500/20 bg-cyan-500/10 px-3 py-1.5 text-cyan-300 disabled:opacity-50"><RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />{phase === 'ready' ? `${fa(countdown, 0)} ث` : 'تلاش دوباره'}</button>
-        </div>
-      </header>
+  return (
+    <main className="min-h-screen bg-[#07090F] px-3 py-8 font-dana text-slate-300 sm:px-4" dir="rtl">
+      <div className="mx-auto max-w-6xl">
+        <header className="mb-7 flex flex-col gap-4 border-b border-slate-800/70 pb-6 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="mb-2 flex items-center gap-2 text-xs text-cyan-400"><Radio size={15} />پایش زنده جریان پول</div>
+            <h1 className="text-xl text-slate-100 sm:text-2xl" style={{ fontWeight: 900 }}>تریگر تبلیغات صندوق‌ها</h1>
+            <p className="mt-2 max-w-2xl text-xs leading-6 text-slate-500">
+              شرط تصمیم: عبور حجم معاملات امروز از سهم مورد انتظار بازه زمانی، و عبور ورود پول از درصد مشخصی از میانگین ارزش معاملات ۲۰ روز اخیر.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="rounded-md border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1.5 text-emerald-300">{faNum(readyCount)} آماده</span>
+            <span className="rounded-md border border-slate-800 bg-slate-900 px-2.5 py-1.5 tabular-nums text-slate-500">{fmtTime(now)}</span>
+            <button type="button" onClick={() => phase === 'ready' ? refreshLive() : initialize()} disabled={refreshing || phase === 'loading'} className="flex items-center gap-2 rounded-md border border-cyan-500/20 bg-cyan-500/10 px-3 py-1.5 text-cyan-300 disabled:opacity-50">
+              <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />{phase === 'ready' ? `${fa(countdown, 0)} ث` : 'تلاش دوباره'}
+            </button>
+          </div>
+        </header>
 
-      {phase === 'loading' && <div className="grid min-h-72 place-items-center"><div className="text-center"><RefreshCw className="mx-auto animate-spin text-cyan-400" /><p className="mt-4 text-sm text-slate-400">در حال تکمیل فهرست صندوق‌ها و ساخت خط مبنا...</p><p className="mt-2 text-xs text-slate-600">بارگذاری اول ممکن است کمی بیشتر طول بکشد.</p></div></div>}
-      {phase === 'error' && <div className="grid min-h-72 place-items-center"><div className="text-center"><WifiOff className="mx-auto text-rose-400" /><p className="mt-4 text-sm text-rose-300">دریافت داده کامل نشد.</p><button onClick={initialize} className="mt-4 rounded-md border border-slate-700 px-4 py-2 text-xs text-slate-300">تلاش دوباره</button></div></div>}
-
-      {phase === 'ready' && <>
-        {liveError && <div className="mb-4 flex items-start gap-2 rounded-lg border border-amber-500/15 bg-amber-500/5 p-3 text-xs leading-6 text-amber-300"><AlertTriangle size={16} className="mt-1 shrink-0" />{liveError}</div>}
-        <div className="hidden grid-cols-[1.2fr_repeat(3,1fr)_100px] gap-3 px-4 pb-2 text-center text-xs text-slate-600 sm:grid"><span className="text-right">نوع صندوق</span><span>امروز</span><span>میانگین ۲۰ روز</span><span>حد تریگر</span><span>وضعیت</span></div>
-        <div className="space-y-2">{rows.map((row) => {
-          const go = row.ratio >= 1
-          const watch = row.ratio >= 0.6 && !go
-          const color = go ? '#22C55E' : watch ? '#F59E0B' : '#EF4444'
-          const label = go ? 'تبلیغ بزن' : watch ? 'نزدیکه' : 'صبر کن'
-          const width = `${Math.max(0, Math.min((row.ratio / 1.5) * 100, 100))}%`
-          return <article key={row.id} className="rounded-lg border border-slate-800 bg-[#0C1118] p-4" style={go ? { borderColor: 'rgba(34,197,94,.2)', background: 'rgba(34,197,94,.035)' } : undefined}>
-            <div className="grid grid-cols-2 items-center gap-4 sm:grid-cols-[1.2fr_repeat(3,1fr)_100px] sm:gap-3">
-              <div><h2 className="text-sm text-slate-100" style={{ fontWeight: 900 }}>{row.label}</h2><span className="mt-1 block text-[0.58rem] text-slate-600">پوشش زنده {fa(row.coverage * 100, 0)}٪</span></div>
-              <div className="text-left sm:text-center"><span className="block text-[0.6rem] text-slate-600 sm:hidden">امروز</span><strong className="tabular-nums" style={{ color: row.today >= 0 ? '#22C55E' : '#EF4444' }}>{row.today >= 0 ? '+' : ''}{fa(row.today)}</strong></div>
-              <div className="sm:text-center"><span className="block text-[0.6rem] text-slate-600 sm:hidden">میانگین ۲۰ روز</span><span className="text-sm tabular-nums text-slate-500">{row.average >= 0 ? '+' : ''}{fa(row.average)}</span></div>
-              <div className="text-left sm:text-center"><span className="block text-[0.6rem] text-slate-600 sm:hidden">حد تریگر</span><span className="text-sm tabular-nums text-slate-500">{row.threshold >= 0 ? '+' : ''}{fa(row.threshold)}</span></div>
-              <div className="col-span-2 text-center sm:col-span-1"><span className="inline-block rounded-md border px-2.5 py-1 text-xs" style={{ color, borderColor: `${color}30`, background: `${color}12`, fontWeight: 800 }}>{label}</span></div>
+        {phase === 'loading' && (
+          <div className="grid min-h-72 place-items-center">
+            <div className="text-center">
+              <RefreshCw className="mx-auto animate-spin text-cyan-400" />
+              <p className="mt-4 text-sm text-slate-400">در حال دریافت داده زنده و میانگین ۲۰ روزه از TSETMC...</p>
+              <p className="mt-2 text-xs text-slate-600">دیگر به baseline قدیمی وابسته نیست.</p>
             </div>
-            <div className="mt-3 h-1 overflow-hidden rounded-full bg-slate-800"><div className="h-full rounded-full transition-[width] duration-700" style={{ width, background: color }} /></div>
-          </article>
-        })}</div>
-        <footer className="mt-5 flex items-center justify-between text-[0.65rem] text-slate-600"><span>ارقام: میلیارد تومان</span><span>آخرین داده سالم: {fmtTime(updatedAt)}</span></footer>
-      </>}
+          </div>
+        )}
+
+        {phase === 'error' && (
+          <div className="grid min-h-72 place-items-center">
+            <div className="text-center">
+              <WifiOff className="mx-auto text-rose-400" />
+              <p className="mt-4 text-sm text-rose-300">دریافت داده کامل نشد.</p>
+              <button onClick={initialize} className="mt-4 rounded-md border border-slate-700 px-4 py-2 text-xs text-slate-300">تلاش دوباره</button>
+            </div>
+          </div>
+        )}
+
+        {phase === 'ready' && (
+          <>
+            {liveError && (
+              <div className="mb-4 flex items-start gap-2 rounded-lg border border-amber-500/15 bg-amber-500/5 p-3 text-xs leading-6 text-amber-300">
+                <AlertTriangle size={16} className="mt-1 shrink-0" />{liveError}
+              </div>
+            )}
+            <div className="grid gap-3">
+              {rows.map((row) => {
+                const progressPct = Number.isFinite(row.tradeProgress) ? row.tradeProgress * 100 : null
+                const flowRatio = Number.isFinite(row.netFlow) && Number.isFinite(row.triggerThreshold) && row.triggerThreshold > 0
+                  ? row.netFlow / row.triggerThreshold
+                  : 0
+                const flowWidth = `${Math.max(0, Math.min(flowRatio * 100, 100))}%`
+                const progressWidth = `${Math.max(0, Math.min((row.tradeProgress || 0) / row.tradeProgressPct * 100, 100))}%`
+                const decisionColor = row.decision === 'go' ? '#22C55E' : row.decision === 'watch' ? '#F59E0B' : '#64748B'
+                return (
+                  <article key={row.id} className="rounded-xl border border-slate-800 bg-[#0C1118] p-4" style={row.decision === 'go' ? { borderColor: 'rgba(34,197,94,.24)', background: 'rgba(34,197,94,.04)' } : undefined}>
+                    <div className="grid gap-4 lg:grid-cols-[1.25fr_1fr_1fr_1fr_120px] lg:items-center">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="h-2 w-2 rounded-full" style={{ background: row.color }} />
+                          <h2 className="text-sm text-slate-100" style={{ fontWeight: 900 }}>{row.label}</h2>
+                          <span className="rounded bg-slate-900 px-1.5 py-0.5 text-[0.62rem] text-slate-500">{faNum(row.ok)}/{faNum(row.total)}</span>
+                        </div>
+                        <p className="mt-2 text-[0.68rem] leading-5 text-slate-500">
+                          تصمیم {row.windowStart} تا {row.windowEnd} · اجرای تبلیغ {row.actionTime}
+                        </p>
+                      </div>
+
+                      <Metric label="ورود پول امروز" value={`${row.netFlow >= 0 ? '+' : ''}${fa(row.netFlow)} میلیارد`} color={row.netFlow >= 0 ? '#22C55E' : '#EF4444'} />
+                      <Metric label="حد ورود پول" value={`${fa(row.triggerThreshold)} میلیارد`} />
+                      <Metric label="حجم امروز / میانگین ۲۰ روز" value={`${fa(progressPct, 0)}٪`} color={row.progressReady ? '#22C55E' : '#F59E0B'} />
+
+                      <div className="flex justify-start lg:justify-center">
+                        <TriggerBadge state={row.decision} />
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid gap-3 md:grid-cols-2">
+                      <Bar label={`ورود پول نسبت به حد ${fa(row.triggerPct * 100, 0)}٪`} width={flowWidth} color={decisionColor} />
+                      <Bar label={`پیشرفت حجم معاملات نسبت به حد ${fa(row.tradeProgressPct * 100, 0)}٪`} width={progressWidth} color={row.progressReady ? '#22C55E' : '#F59E0B'} />
+                    </div>
+
+                    {row.id !== 'fixed' && row.fixedOutflowTriggered && (
+                      <p className="mt-3 rounded-lg border border-rose-400/15 bg-rose-400/5 px-3 py-2 text-xs leading-6 text-rose-300">
+                        خروج پول از درآمد ثابت هم فعال است: {fa(row.fixedOutflowThreshold)} میلیارد تومان.
+                      </p>
+                    )}
+                  </article>
+                )
+              })}
+            </div>
+            <footer className="mt-5 flex flex-col gap-2 text-[0.65rem] text-slate-600 sm:flex-row sm:items-center sm:justify-between">
+              <span>ارقام: میلیارد تومان · منبع: TSETMC</span>
+              <span>آخرین داده سالم: {fmtTime(updatedAt)}</span>
+            </footer>
+          </>
+        )}
+      </div>
+    </main>
+  )
+}
+
+function Metric({ label, value, color = '#CBD5E1' }) {
+  return (
+    <div className="rounded-lg border border-slate-800 bg-slate-950/35 px-3 py-2">
+      <div className="text-[0.62rem] text-slate-600">{label}</div>
+      <div className="mt-1 text-sm tabular-nums" style={{ fontWeight: 900, color }}>{value}</div>
     </div>
-  </main>
+  )
+}
+
+function Bar({ label, width, color }) {
+  return (
+    <div>
+      <div className="mb-1 text-[0.62rem] text-slate-600">{label}</div>
+      <div className="h-1.5 overflow-hidden rounded-full bg-slate-800">
+        <div className="h-full rounded-full transition-[width] duration-700" style={{ width, background: color }} />
+      </div>
+    </div>
+  )
 }
