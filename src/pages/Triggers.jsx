@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, CheckCircle2, Clock3, Radio, RefreshCw, WifiOff } from 'lucide-react'
-import { fetchFundCompare, faNum, todayISO } from '../lib/fipiran'
+import { fetchFundCompare, fetchRangeReturns, faNum, monthsBeforeISO, todayISO } from '../lib/fipiran'
 
 const TSETMC = '/tsetmc'
 const REFRESH_SECONDS = 20
-const HISTORY_DAYS = 40
 const AVG_DAYS = 20
 const CONCURRENCY = 12
 
@@ -16,7 +15,6 @@ const PRODUCTS = [
     short: 'درآمد ثابت',
     color: '#00FF9D',
     triggerPct: 0.2,
-    tradeProgressPct: 0.3,
     windowStart: '09:00',
     windowEnd: '11:00',
     actionTime: '11:30',
@@ -28,7 +26,6 @@ const PRODUCTS = [
     short: 'سهامی',
     color: '#00D4FF',
     triggerPct: 0.2,
-    tradeProgressPct: 0.3,
     windowStart: '09:00',
     windowEnd: '10:00',
     actionTime: '10:30',
@@ -40,7 +37,6 @@ const PRODUCTS = [
     short: 'بخشی',
     color: '#34D399',
     triggerPct: 0.25,
-    tradeProgressPct: 0.3,
     windowStart: '09:00',
     windowEnd: '10:00',
     actionTime: '10:30',
@@ -52,7 +48,6 @@ const PRODUCTS = [
     short: 'مختلط',
     color: '#A78BFA',
     triggerPct: 0.2,
-    tradeProgressPct: 0.3,
     windowStart: '09:00',
     windowEnd: '10:00',
     actionTime: '10:30',
@@ -64,7 +59,6 @@ const PRODUCTS = [
     short: 'طلا',
     color: '#FBBF24',
     triggerPct: 0.2,
-    tradeProgressPct: 0.21,
     windowStart: '12:00',
     windowEnd: '13:00',
     actionTime: '13:30',
@@ -76,6 +70,10 @@ const FIXED_OUTFLOW_PCT = 0.11
 
 const fa = (number, decimals = 1) => Number.isFinite(Number(number))
   ? Number(number).toLocaleString('fa-IR', { maximumFractionDigits: decimals, minimumFractionDigits: decimals })
+  : '—'
+
+const signedBT = (number) => Number.isFinite(Number(number))
+  ? `${Number(number) >= 0 ? '+' : ''}${fa(number)} میلیارد`
   : '—'
 
 const fmtTime = (date) => date?.toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) || '—'
@@ -124,16 +122,11 @@ async function mapLimit(items, limit, mapper) {
   return out
 }
 
-const validDailyRows = (rows) => (Array.isArray(rows) ? rows : [])
-  .filter((row) => Number(row?.pClosing) > 0 && Number(row?.qTotTran5J) >= 0)
-  .sort((a, b) => Number(b.dEven) - Number(a.dEven))
-
 async function fetchFundMarket(fund) {
   try {
-    const [clientPayload, pricePayload, dailyPayload] = await Promise.all([
+    const [clientPayload, pricePayload] = await Promise.all([
       tse(`ClientType/GetClientType/${fund.insCode}/1/0`, { timeout: 7000 }),
       tse(`ClosingPrice/GetClosingPriceInfo/${fund.insCode}`, { timeout: 7000 }),
-      tse(`ClosingPrice/GetClosingPriceDailyList/${fund.insCode}/${HISTORY_DAYS}`, { timeout: 9000 }),
     ])
     const client = clientPayload.clientType
     const price = pricePayload.closingPriceInfo
@@ -141,19 +134,11 @@ async function fetchFundMarket(fund) {
 
     const livePrice = Number(price.pClosing) || Number(price.pDrCotVal) || Number(fund.navRet) || 0
     const netVolume = (Number(client.buy_I_Volume) || 0) - (Number(client.sell_I_Volume) || 0)
-    const todayTradeValue = ((Number(price.qTotTran5J) || 0) * livePrice) / 1e10
     const netFlow = (netVolume * livePrice) / 1e10
-    const daily = validDailyRows(dailyPayload.closingPriceDaily)
-      .filter((row) => Number(row.qTotTran5J) > 0)
-      .slice(0, AVG_DAYS)
-      .map((row) => (Number(row.qTotTran5J) * Number(row.pClosing)) / 1e10)
-    const avgTradeValue = daily.length ? daily.reduce((sum, value) => sum + value, 0) / daily.length : null
 
     return {
       insCode: fund.insCode,
       netFlow,
-      todayTradeValue,
-      avgTradeValue,
     }
   } catch {
     return null
@@ -162,13 +147,18 @@ async function fetchFundMarket(fund) {
 
 function aggregateMarkets(markets) {
   const valid = markets.filter(Boolean)
-  const avgValues = valid.map((item) => item.avgTradeValue).filter(Number.isFinite)
   return {
     ok: valid.length,
     netFlow: valid.reduce((sum, item) => sum + item.netFlow, 0),
-    todayTradeValue: valid.reduce((sum, item) => sum + item.todayTradeValue, 0),
-    avgTradeValue: avgValues.reduce((sum, value) => sum + value, 0),
   }
+}
+
+function calcAverageDailyFlow(funds) {
+  const totalFlow = funds.reduce((sum, fund) => {
+    if (!Number.isFinite(fund.unitsStart) || !(fund.navRet > 0)) return sum
+    return sum + ((fund.units - fund.unitsStart) * fund.navRet) / 1e10
+  }, 0)
+  return totalFlow / AVG_DAYS
 }
 
 function TriggerBadge({ state }) {
@@ -190,32 +180,33 @@ export default function Triggers() {
   const [refreshing, setRefreshing] = useState(false)
   const [liveError, setLiveError] = useState('')
   const fundsByProduct = useRef({})
+  const averageFlowByProduct = useRef({})
   const refreshLock = useRef(false)
   const mounted = useRef(true)
   const hasRows = useRef(false)
 
   const buildRows = useCallback((aggregates) => {
     const fixed = aggregates.fixed
-    const fixedOutflowThreshold = fixed?.avgTradeValue ? -fixed.avgTradeValue * FIXED_OUTFLOW_PCT : null
+    const fixedAverageFlow = averageFlowByProduct.current.fixed
+    const fixedOutflowThreshold = Number.isFinite(fixedAverageFlow) && fixedAverageFlow !== 0
+      ? -Math.abs(fixedAverageFlow) * FIXED_OUTFLOW_PCT
+      : null
     const fixedOutflowTriggered = Number.isFinite(fixed?.netFlow) &&
       Number.isFinite(fixedOutflowThreshold) &&
       fixed.netFlow <= fixedOutflowThreshold
 
     return PRODUCTS.map((product) => {
-      const aggregate = aggregates[product.id] || { ok: 0, netFlow: null, todayTradeValue: null, avgTradeValue: null }
-      const triggerThreshold = Number.isFinite(aggregate.avgTradeValue)
-        ? aggregate.avgTradeValue * product.triggerPct
-        : null
-      const tradeProgress = Number.isFinite(aggregate.avgTradeValue) && aggregate.avgTradeValue > 0
-        ? aggregate.todayTradeValue / aggregate.avgTradeValue
+      const aggregate = aggregates[product.id] || { ok: 0, netFlow: null }
+      const averageFlow = averageFlowByProduct.current[product.id]
+      const triggerThreshold = Number.isFinite(averageFlow) && averageFlow !== 0
+        ? Math.abs(averageFlow) * product.triggerPct
         : null
       const targetTriggered = Number.isFinite(aggregate.netFlow) &&
         Number.isFinite(triggerThreshold) &&
         aggregate.netFlow >= triggerThreshold
-      const progressReady = Number.isFinite(tradeProgress) && tradeProgress >= product.tradeProgressPct
       const window = windowState(product)
-      const go = progressReady && (targetTriggered || (product.id !== 'fixed' && fixedOutflowTriggered))
-      const watch = !go && progressReady && (
+      const go = targetTriggered || (product.id !== 'fixed' && fixedOutflowTriggered)
+      const watch = !go && (
         (Number.isFinite(aggregate.netFlow) && Number.isFinite(triggerThreshold) && aggregate.netFlow >= triggerThreshold * 0.65) ||
         (product.id !== 'fixed' && fixedOutflowTriggered)
       )
@@ -223,11 +214,10 @@ export default function Triggers() {
         ...product,
         ...aggregate,
         triggerThreshold,
+        averageFlow,
         fixedOutflowThreshold,
         fixedOutflowTriggered,
         targetTriggered,
-        tradeProgress,
-        progressReady,
         window,
         decision: go ? 'go' : watch ? 'watch' : 'wait',
         total: fundsByProduct.current[product.id]?.length || 0,
@@ -272,7 +262,11 @@ export default function Triggers() {
     setPhase('loading')
     setLiveError('')
     try {
-      const snap = await fetchFundCompare(todayISO())
+      const end = todayISO()
+      const [snap, rangeSnap] = await Promise.all([
+        fetchFundCompare(end),
+        fetchRangeReturns(monthsBeforeISO(end, 1), end),
+      ])
       for (const product of PRODUCTS) {
         fundsByProduct.current[product.id] = snap.funds.filter((fund) =>
           fund.type === product.typeId &&
@@ -281,6 +275,14 @@ export default function Triggers() {
           fund.insCode &&
           (!product.filter || product.filter(fund))
         )
+        const rangeFunds = rangeSnap.funds.filter((fund) =>
+          fund.type === product.typeId &&
+          fund.isETF &&
+          !fund.isCharity &&
+          fund.insCode &&
+          (!product.filter || product.filter(fund))
+        )
+        averageFlowByProduct.current[product.id] = calcAverageDailyFlow(rangeFunds)
       }
       await refreshLive({ initial: true })
     } catch {
@@ -329,7 +331,7 @@ export default function Triggers() {
             <div className="mb-2 flex items-center gap-2 text-xs text-cyan-400"><Radio size={15} />پایش زنده جریان پول</div>
             <h1 className="text-xl text-slate-100 sm:text-2xl" style={{ fontWeight: 900 }}>تریگر تبلیغات صندوق‌ها</h1>
             <p className="mt-2 max-w-2xl text-xs leading-6 text-slate-500">
-              شرط تصمیم: عبور حجم معاملات امروز از سهم مورد انتظار بازه زمانی، و عبور ورود پول از درصد مشخصی از میانگین ارزش معاملات ۲۰ روز اخیر.
+              شرط تصمیم: ورود پول امروز باید از درصد مشخصی از میانگین ورود پول ماه اخیر همان گروه عبور کند.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -345,7 +347,7 @@ export default function Triggers() {
           <div className="grid min-h-72 place-items-center">
             <div className="text-center">
               <RefreshCw className="mx-auto animate-spin text-cyan-400" />
-              <p className="mt-4 text-sm text-slate-400">در حال دریافت داده زنده و میانگین ۲۰ روزه از TSETMC...</p>
+              <p className="mt-4 text-sm text-slate-400">در حال دریافت داده زنده و محاسبه میانگین ورود پول...</p>
               <p className="mt-2 text-xs text-slate-600">دیگر به baseline قدیمی وابسته نیست.</p>
             </div>
           </div>
@@ -370,16 +372,14 @@ export default function Triggers() {
             )}
             <div className="grid gap-3">
               {rows.map((row) => {
-                const progressPct = Number.isFinite(row.tradeProgress) ? row.tradeProgress * 100 : null
                 const flowRatio = Number.isFinite(row.netFlow) && Number.isFinite(row.triggerThreshold) && row.triggerThreshold > 0
                   ? row.netFlow / row.triggerThreshold
                   : 0
                 const flowWidth = `${Math.max(0, Math.min(flowRatio * 100, 100))}%`
-                const progressWidth = `${Math.max(0, Math.min((row.tradeProgress || 0) / row.tradeProgressPct * 100, 100))}%`
                 const decisionColor = row.decision === 'go' ? '#22C55E' : row.decision === 'watch' ? '#F59E0B' : '#64748B'
                 return (
                   <article key={row.id} className="rounded-xl border border-slate-800 bg-[#0C1118] p-4" style={row.decision === 'go' ? { borderColor: 'rgba(34,197,94,.24)', background: 'rgba(34,197,94,.04)' } : undefined}>
-                    <div className="grid gap-4 lg:grid-cols-[1.25fr_1fr_1fr_1fr_120px] lg:items-center">
+                    <div className="grid gap-4 lg:grid-cols-[1.25fr_1fr_.72fr_.9fr_1fr_120px] lg:items-center">
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="h-2 w-2 rounded-full" style={{ background: row.color }} />
@@ -391,18 +391,18 @@ export default function Triggers() {
                         </p>
                       </div>
 
-                      <Metric label="ورود پول امروز" value={`${row.netFlow >= 0 ? '+' : ''}${fa(row.netFlow)} میلیارد`} color={row.netFlow >= 0 ? '#22C55E' : '#EF4444'} />
-                      <Metric label="حد ورود پول" value={`${fa(row.triggerThreshold)} میلیارد`} />
-                      <Metric label="حجم امروز / میانگین ۲۰ روز" value={`${fa(progressPct, 0)}٪`} color={row.progressReady ? '#22C55E' : '#F59E0B'} />
+                      <Metric label="میانگین ورود پول" value={signedBT(row.averageFlow)} color={row.averageFlow >= 0 ? '#CBD5E1' : '#94A3B8'} />
+                      <Metric label="درصد تریگر" value={`${fa(row.triggerPct * 100, 0)}٪`} />
+                      <Metric label="حد تریگر" value={`${fa(row.triggerThreshold)} میلیارد`} />
+                      <Metric label="ورود پول امروز" value={signedBT(row.netFlow)} color={row.netFlow >= 0 ? '#22C55E' : '#EF4444'} />
 
                       <div className="flex justify-start lg:justify-center">
                         <TriggerBadge state={row.decision} />
                       </div>
                     </div>
 
-                    <div className="mt-4 grid gap-3 md:grid-cols-2">
-                      <Bar label={`ورود پول نسبت به حد ${fa(row.triggerPct * 100, 0)}٪`} width={flowWidth} color={decisionColor} />
-                      <Bar label={`پیشرفت حجم معاملات نسبت به حد ${fa(row.tradeProgressPct * 100, 0)}٪`} width={progressWidth} color={row.progressReady ? '#22C55E' : '#F59E0B'} />
+                    <div className="mt-4">
+                      <Bar label="نسبت ورود پول امروز به حد تریگر" width={flowWidth} color={decisionColor} />
                     </div>
 
                     {row.id !== 'fixed' && row.fixedOutflowTriggered && (
@@ -415,7 +415,7 @@ export default function Triggers() {
               })}
             </div>
             <footer className="mt-5 flex flex-col gap-2 text-[0.65rem] text-slate-600 sm:flex-row sm:items-center sm:justify-between">
-              <span>ارقام: میلیارد تومان · منبع: TSETMC</span>
+              <span>ارقام: میلیارد تومان · ورود پول امروز: TSETMC · میانگین ورود پول: فیپیران</span>
               <span>آخرین داده سالم: {fmtTime(updatedAt)}</span>
             </footer>
           </>
