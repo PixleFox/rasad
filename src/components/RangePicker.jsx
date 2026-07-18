@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useMemo } from 'react'
 import DatePickerNS from 'react-multi-date-picker'
 import persianNS from 'react-date-object/calendars/persian'
 import persianFaNS from 'react-date-object/locales/persian_fa'
@@ -18,6 +18,10 @@ const inputClass =
   'bg-surface/70 border border-neon-cyan/20 rounded-lg px-2 py-2 text-xs sm:text-sm text-text-primary font-dana cursor-pointer hover:border-neon-cyan/40 focus:border-neon-cyan/60 focus:outline-none transition-colors duration-200 w-full text-center'
 
 export default function RangePicker({ startISO, endISO, onStart, onEnd }) {
+  const startDate = useMemo(() => new Date(startISO + 'T00:00:00'), [startISO])
+  const endDate = useMemo(() => new Date(endISO + 'T00:00:00'), [endISO])
+  const todayDate = useMemo(() => new Date(todayISO() + 'T00:00:00'), [])
+
   const handleStart = useCallback((d) => {
     const iso = objToISO(d)
     if (iso && iso !== startISO) onStart(iso)
@@ -36,8 +40,8 @@ export default function RangePicker({ startISO, endISO, onStart, onEnd }) {
         <DatePicker
           calendar={persian}
           locale={persian_fa}
-          value={new Date(startISO + 'T00:00:00')}
-          maxDate={new Date(endISO + 'T00:00:00')}
+          value={startDate}
+          maxDate={endDate}
           onChange={handleStart}
           format="YYYY/MM/DD"
           inputClass={inputClass}
@@ -53,9 +57,9 @@ export default function RangePicker({ startISO, endISO, onStart, onEnd }) {
         <DatePicker
           calendar={persian}
           locale={persian_fa}
-          value={new Date(endISO + 'T00:00:00')}
-          minDate={new Date(startISO + 'T00:00:00')}
-          maxDate={new Date(todayISO() + 'T00:00:00')}
+          value={endDate}
+          minDate={startDate}
+          maxDate={todayDate}
           onChange={handleEnd}
           format="YYYY/MM/DD"
           inputClass={inputClass}
