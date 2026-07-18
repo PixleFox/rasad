@@ -18,6 +18,54 @@ function rankWithinType(funds, typeId) {
   return map
 }
 
+const normalizeFundGroupName = (value) => String(value || '')
+  .replace(/[يى]/g, 'ی')
+  .replace(/ك/g, 'ک')
+  .replace(/[\u200c\u200d\u200e\u200f]/g, ' ')
+  .replace(/\s+/g, ' ')
+  .trim()
+
+function fundFlowRial(fund) {
+  return Number.isFinite(fund.unitsStart) && fund.navRet > 0
+    ? (fund.units - fund.unitsStart) * fund.navRet
+    : null
+}
+
+function groupMultiNavFunds(funds) {
+  const groups = new Map()
+  for (const fund of funds) {
+    const key = `${normalizeFundGroupName(fund.name)}|${fund.type}|${normalizeFundGroupName(fund.manager)}`
+    if (!groups.has(key)) {
+      groups.set(key, {
+        ...fund,
+        regNo: `group-${key}`,
+        sizeRial: 0,
+        flowRial: 0,
+        flowKnown: false,
+        symbols: [],
+        sourceFunds: [],
+        isMultiNavGroup: false,
+      })
+    }
+    const group = groups.get(key)
+    group.sizeRial += Number(fund.sizeRial) || 0
+    const flow = fundFlowRial(fund)
+    if (Number.isFinite(flow)) {
+      group.flowRial += flow
+      group.flowKnown = true
+    }
+    if (fund.symbol) group.symbols.push(fund.symbol)
+    group.sourceFunds.push(fund)
+    group.isMultiNavGroup = group.sourceFunds.length > 1
+    group.stale = group.stale || fund.stale
+    group.staleDate = group.staleDate || fund.staleDate
+  }
+  return Array.from(groups.values()).map((group) => ({
+    ...group,
+    symbols: [...new Set(group.symbols)],
+  }))
+}
+
 // ── cells ─────────────────────────────────────────────────────────────────────
 function FlowCell({ value }) {
   if (!Number.isFinite(value)) return <span className="text-text-muted/40 text-xs">—</span>
@@ -129,6 +177,16 @@ export default function ManagerDashboard() {
         <div className="flex flex-col min-w-[180px]">
           <span className="text-text-primary text-sm font-dana" style={{ fontWeight: 800 }}>{f.name}</span>
           <span className="text-text-muted text-xs font-dana" style={{ fontWeight: 600 }}>{FUND_TYPES[f.type] ?? 'سایر'}</span>
+          {f.symbols?.length > 1 && (
+            <span className="text-[0.6rem] text-neon-cyan font-dana" style={{ fontWeight: 700 }}>
+              مجموع نمادها: {f.symbols.join('، ')}
+            </span>
+          )}
+          {!f.symbols?.length && f.symbol && (
+            <span className="text-[0.6rem] text-neon-cyan font-dana" style={{ fontWeight: 700 }}>
+              نماد: {f.symbol}
+            </span>
+          )}
           {f.stale && f.staleDate && <span className="text-[0.58rem] text-amber-300">داده {toJalali(f.staleDate)}</span>}
         </div>
       ),
@@ -144,13 +202,16 @@ export default function ManagerDashboard() {
     },
     {
       key: 'flow', label: 'خالص ورود و خروج پول (میلیارد تومان)',
-      sortVal: (f) => (Number.isFinite(f.unitsStart) && f.navRet > 0 ? (f.units - f.unitsStart) * f.navRet / 1e10 : null),
+      sortVal: (f) => Number.isFinite(f.flowRial) ? f.flowRial / 1e10 : (Number.isFinite(f.unitsStart) && f.navRet > 0 ? (f.units - f.unitsStart) * f.navRet / 1e10 : null),
       render: (f) => {
-        const v = Number.isFinite(f.unitsStart) && f.navRet > 0
-          ? Math.round((f.units - f.unitsStart) * f.navRet / 1e10) : null
+        const flow = Number.isFinite(f.flowRial) ? f.flowRial : fundFlowRial(f)
+        const v = Number.isFinite(flow) ? Math.round(flow / 1e10) : null
         return <FlowCell value={v} />
       },
-      exportValue: (f) => (Number.isFinite(f.unitsStart) && f.navRet > 0 ? Math.round((f.units - f.unitsStart) * f.navRet / 1e10) : null),
+      exportValue: (f) => {
+        const flow = Number.isFinite(f.flowRial) ? f.flowRial : fundFlowRial(f)
+        return Number.isFinite(flow) ? Math.round(flow / 1e10) : null
+      },
     },
   ]
 
@@ -173,6 +234,7 @@ export default function ManagerDashboard() {
         <div className="flex flex-col min-w-[180px]">
           <span className="text-text-primary text-sm font-dana" style={{ fontWeight: 800 }}>{f.name}</span>
           <span className="text-text-muted text-xs font-dana" style={{ fontWeight: 600 }}>{FUND_TYPES[f.type] ?? 'سایر'}</span>
+          {f.symbol && <span className="text-[0.6rem] text-neon-cyan font-dana" style={{ fontWeight: 700 }}>نماد: {f.symbol}</span>}
           {f.stale && f.staleDate && <span className="text-[0.58rem] text-amber-300">داده {toJalali(f.staleDate)}</span>}
         </div>
       ),
@@ -233,6 +295,7 @@ export default function ManagerDashboard() {
     )
   }
 
+  const statusRows = groupMultiNavFunds(mgrRow.funds).sort((a, b) => (b.sizeRial ?? 0) - (a.sizeRial ?? 0))
   const fundRows = [...mgrRow.funds].sort((a, b) => (b.sizeRial ?? 0) - (a.sizeRial ?? 0))
 
   return (
@@ -298,7 +361,7 @@ export default function ManagerDashboard() {
         <SectionTitle>وضعیت ابزارهای مدیریت دارایی {mgrRow.core}:</SectionTitle>
         <FundsTable
           columns={statusCols}
-          rows={fundRows}
+          rows={statusRows}
           defaultSortKey="aum"
           minWidth={540}
           loading={false}
