@@ -66,8 +66,6 @@ const PRODUCTS = [
   },
 ]
 
-const FIXED_OUTFLOW_PCT = 0.11
-
 const fa = (number, decimals = 1) => Number.isFinite(Number(number))
   ? Number(number).toLocaleString('fa-IR', { maximumFractionDigits: decimals, minimumFractionDigits: decimals })
   : '—'
@@ -186,37 +184,29 @@ export default function Triggers() {
   const hasRows = useRef(false)
 
   const buildRows = useCallback((aggregates) => {
-    const fixed = aggregates.fixed
-    const fixedAverageFlow = averageFlowByProduct.current.fixed
-    const fixedOutflowThreshold = Number.isFinite(fixedAverageFlow) && fixedAverageFlow !== 0
-      ? -Math.abs(fixedAverageFlow) * FIXED_OUTFLOW_PCT
-      : null
-    const fixedOutflowTriggered = Number.isFinite(fixed?.netFlow) &&
-      Number.isFinite(fixedOutflowThreshold) &&
-      fixed.netFlow <= fixedOutflowThreshold
-
     return PRODUCTS.map((product) => {
       const aggregate = aggregates[product.id] || { ok: 0, netFlow: null }
       const averageFlow = averageFlowByProduct.current[product.id]
       const triggerThreshold = Number.isFinite(averageFlow) && averageFlow !== 0
-        ? Math.abs(averageFlow) * product.triggerPct
+        ? averageFlow * product.triggerPct
         : null
       const targetTriggered = Number.isFinite(aggregate.netFlow) &&
         Number.isFinite(triggerThreshold) &&
+        triggerThreshold > 0 &&
         aggregate.netFlow >= triggerThreshold
       const window = windowState(product)
-      const go = targetTriggered || (product.id !== 'fixed' && fixedOutflowTriggered)
+      const go = targetTriggered
       const watch = !go && (
-        (Number.isFinite(aggregate.netFlow) && Number.isFinite(triggerThreshold) && aggregate.netFlow >= triggerThreshold * 0.65) ||
-        (product.id !== 'fixed' && fixedOutflowTriggered)
+        Number.isFinite(aggregate.netFlow) &&
+        Number.isFinite(triggerThreshold) &&
+        triggerThreshold > 0 &&
+        aggregate.netFlow >= triggerThreshold * 0.65
       )
       return {
         ...product,
         ...aggregate,
         triggerThreshold,
         averageFlow,
-        fixedOutflowThreshold,
-        fixedOutflowTriggered,
         targetTriggered,
         window,
         decision: go ? 'go' : watch ? 'watch' : 'wait',
@@ -393,7 +383,7 @@ export default function Triggers() {
 
                       <Metric label="میانگین ورود پول" value={signedBT(row.averageFlow)} color={row.averageFlow >= 0 ? '#CBD5E1' : '#94A3B8'} />
                       <Metric label="درصد تریگر" value={`${fa(row.triggerPct * 100, 0)}٪`} />
-                      <Metric label="حد تریگر" value={`${fa(row.triggerThreshold)} میلیارد`} />
+                      <Metric label="حد تریگر" value={signedBT(row.triggerThreshold)} color={row.triggerThreshold >= 0 ? '#CBD5E1' : '#EF4444'} />
                       <Metric label="ورود پول امروز" value={signedBT(row.netFlow)} color={row.netFlow >= 0 ? '#22C55E' : '#EF4444'} />
 
                       <div className="flex justify-start lg:justify-center">
@@ -404,12 +394,6 @@ export default function Triggers() {
                     <div className="mt-4">
                       <Bar label="نسبت ورود پول امروز به حد تریگر" width={flowWidth} color={decisionColor} />
                     </div>
-
-                    {row.id !== 'fixed' && row.fixedOutflowTriggered && (
-                      <p className="mt-3 rounded-lg border border-rose-400/15 bg-rose-400/5 px-3 py-2 text-xs leading-6 text-rose-300">
-                        خروج پول از درآمد ثابت هم فعال است: {fa(row.fixedOutflowThreshold)} میلیارد تومان.
-                      </p>
-                    )}
                   </article>
                 )
               })}
