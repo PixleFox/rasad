@@ -34,7 +34,7 @@ function fundFlowRial(fund) {
 function groupMultiNavFunds(funds) {
   const groups = new Map()
   for (const fund of funds) {
-    const key = `${normalizeFundGroupName(fund.name)}|${fund.type}|${normalizeFundGroupName(fund.manager)}`
+    const key = `${normalizeFundGroupName(fund.name)}|${fund.type}`
     if (!groups.has(key)) {
       groups.set(key, {
         ...fund,
