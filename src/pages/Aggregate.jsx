@@ -312,18 +312,15 @@ export default function Aggregate() {
 
 // ── Live market flow table ────────────────────────────────────────────────────
 const TSE_BASE = '/tsetmc'
-const _liveCache = new Map()
+const LIVE_REFRESH_MS = 20000
+const LIVE_CONCURRENCY = 12
 async function tseGet(path, timeoutMs = 8000) {
-  if (_liveCache.has(path)) return _liveCache.get(path)
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), timeoutMs)
   try {
-    const r = await fetch(`${TSE_BASE}/${path}`, { signal: ctrl.signal })
+    const r = await fetch(`${TSE_BASE}/${path}`, { signal: ctrl.signal, cache: 'no-store' })
     if (!r.ok) throw new Error(r.status)
-    const d = await r.json()
-    _liveCache.set(path, d)
-    setTimeout(() => _liveCache.delete(path), 60000) // expire after 60s
-    return d
+    return r.json()
   } finally { clearTimeout(timer) }
 }
 
@@ -335,9 +332,22 @@ async function fundLiveFlow(insCode) {
     ])
     const c = ct.clientType
     const p = pr.closingPriceInfo
-    if (!c || !p) return 0
+    if (!c || !p) return null
     return ((c.buy_I_Volume ?? 0) - (c.sell_I_Volume ?? 0)) * (p.pClosing ?? 0) / 1e10
-  } catch { return 0 }
+  } catch { return null }
+}
+
+async function mapLimit(items, limit, mapper) {
+  const out = new Array(items.length)
+  let next = 0
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const index = next
+      next += 1
+      out[index] = await mapper(items[index], index)
+    }
+  }))
+  return out
 }
 
 const LIVE_TYPES = [
@@ -355,6 +365,8 @@ const LIVE_TYPES = [
 function LiveFlowTable() {
   const navigate = useNavigate()
   const [flows, setFlows] = useState({})
+  const [coverage, setCoverage] = useState({})
+  const [refreshing, setRefreshing] = useState(false)
   const [phase, setPhase] = useState('init') // init | done | error
   const [ts, setTs] = useState(null)
   const fundsRef = useRef({})
@@ -374,25 +386,37 @@ function LiveFlowTable() {
   }, [])
 
   const refresh = useCallback(async () => {
+    setRefreshing(true)
     const result = {}
-    await Promise.all(LIVE_TYPES.map(async (cfg) => {
-      const list = fundsRef.current[cfg.id] ?? []
-      if (!list.length) { result[cfg.id] = 0; return }
-      const vals = await Promise.all(list.slice(0, 80).map((f) => fundLiveFlow(f.insCode)))
-      result[cfg.id] = vals.reduce((s, v) => s + v, 0)
-    }))
+    const nextCoverage = {}
+    try {
+      await Promise.all(LIVE_TYPES.map(async (cfg) => {
+        const list = fundsRef.current[cfg.id] ?? []
+        if (!list.length) {
+          result[cfg.id] = null
+          nextCoverage[cfg.id] = { ok: 0, total: 0 }
+          return
+        }
+        const vals = await mapLimit(list, LIVE_CONCURRENCY, (f) => fundLiveFlow(f.insCode))
+        const valid = vals.filter(Number.isFinite)
+        result[cfg.id] = valid.length ? valid.reduce((s, v) => s + v, 0) : null
+        nextCoverage[cfg.id] = { ok: valid.length, total: list.length }
+      }))
+    } finally {
+      setRefreshing(false)
+    }
     setFlows(result)
+    setCoverage(nextCoverage)
     setTs(new Date())
   }, [])
 
   useEffect(() => { load() }, [load])
 
-  // Auto-refresh every 90 seconds
+  // Auto-refresh live TSETMC readings frequently; these endpoints must not use stale cache.
   useEffect(() => {
     const t = setInterval(() => {
-      _liveCache.clear()
       refresh()
-    }, 90000)
+    }, LIVE_REFRESH_MS)
     return () => clearInterval(t)
   }, [refresh])
 
@@ -418,12 +442,12 @@ function LiveFlowTable() {
           </h2>
           <span className="text-xs font-dana px-2.5 py-1 rounded-full"
             style={{ background: 'rgba(0,212,255,0.1)', color: '#00D4FF', border: '1px solid rgba(0,212,255,0.2)', fontWeight: 600 }}>
-            لایو
+            {refreshing ? 'در حال آپدیت' : 'لایو'}
           </span>
         </div>
         {ts && (
           <span className="text-xs font-dana text-text-muted/40" style={{ fontWeight: 600 }}>
-            آپدیت: {ts.toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' })}
+            آپدیت: {ts.toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
           </span>
         )}
       </div>
@@ -453,9 +477,11 @@ function LiveFlowTable() {
         )}
 
         {phase === 'done' && LIVE_TYPES.map((cfg, i) => {
-          const flow = flows[cfg.id] ?? 0
-          const color = flow >= 0 ? '#00FF9D' : '#FF3B6B'
-          const barW = `${Math.min(Math.abs(flow) / 200 * 100, 100)}%`
+          const flow = flows[cfg.id]
+          const hasFlow = Number.isFinite(flow)
+          const color = !hasFlow ? '#8A94A6' : flow >= 0 ? '#00FF9D' : '#FF3B6B'
+          const barW = hasFlow ? `${Math.min(Math.abs(flow) / 200 * 100, 100)}%` : '0%'
+          const cov = coverage[cfg.id]
           return (
             <motion.button
               key={cfg.id}
@@ -469,6 +495,11 @@ function LiveFlowTable() {
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full shrink-0" style={{ background: cfg.color }} />
                 <span className="text-sm font-dana text-text-primary" style={{ fontWeight: 800 }}>{cfg.label}</span>
+                {cov?.total > 0 && cov.ok < cov.total && (
+                  <span className="rounded bg-amber-300/10 px-1.5 py-0.5 text-[0.6rem] text-amber-300">
+                    {faNum(cov.ok)}/{faNum(cov.total)}
+                  </span>
+                )}
                 <svg className="w-3 h-3 text-text-muted/30 mr-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                 </svg>
@@ -489,7 +520,7 @@ function LiveFlowTable() {
       </div>
 
       <p className="text-center text-text-muted/40 text-xs font-dana mt-3" style={{ fontWeight: 600 }}>
-        منبع: TSETMC · به‌روزرسانی خودکار هر ۹۰ ثانیه · کلیک برای مشاهده جزئیات
+        منبع: TSETMC · به‌روزرسانی خودکار هر {faNum(LIVE_REFRESH_MS / 1000)} ثانیه · همه ETFهای هر دسته محاسبه می‌شوند
       </p>
     </motion.div>
   )
