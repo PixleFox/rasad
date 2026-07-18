@@ -1,3 +1,4 @@
+import { useCallback, useMemo } from 'react'
 import DatePickerNS from 'react-multi-date-picker'
 import DateObjectNS from 'react-date-object'
 import gregorianNS from 'react-date-object/calendars/gregorian'
@@ -24,17 +25,17 @@ const inputClass =
   'bg-surface/70 border border-neon-cyan/20 rounded-lg px-2 py-2 text-xs sm:text-sm text-text-primary font-dana cursor-pointer hover:border-neon-cyan/40 focus:border-neon-cyan/60 focus:outline-none transition-colors duration-200 w-full text-center'
 
 export default function RangePicker({ startISO, endISO, onStart, onEnd }) {
-  const startDate = isoToPersianDate(startISO)
-  const endDate = isoToPersianDate(endISO)
-  const today = isoToPersianDate(todayISO())
-  const handleStart = (d) => {
+  const startDate = useMemo(() => isoToPersianDate(startISO), [startISO])
+  const endDate = useMemo(() => isoToPersianDate(endISO), [endISO])
+  const today = useMemo(() => isoToPersianDate(todayISO()), [])
+  const handleStart = useCallback((d) => {
     const iso = objToISO(d)
-    if (iso) onStart(iso)
-  }
-  const handleEnd = (d) => {
+    if (iso && iso !== startISO) onStart(iso)
+  }, [onStart, startISO])
+  const handleEnd = useCallback((d) => {
     const iso = objToISO(d)
-    if (iso) onEnd(iso)
-  }
+    if (iso && iso !== endISO) onEnd(iso)
+  }, [onEnd, endISO])
 
   return (
     <div className="grid w-full grid-cols-2 items-end gap-2 sm:flex sm:w-auto sm:gap-3">
