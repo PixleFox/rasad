@@ -314,7 +314,7 @@ export default function Comparison() {
           className="flex justify-center mb-8">
           <RangePicker
             startISO={startISO} endISO={endISO}
-            onChangeStart={setStartISO} onChangeEnd={setEndISO}
+            onStart={setStartISO} onEnd={setEndISO}
           />
         </motion.div>
 
